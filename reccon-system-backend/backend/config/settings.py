@@ -14,21 +14,24 @@ from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 from corsheaders.defaults import default_headers
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-d+ruqsbrs&hj13r(3h4f=inru_%0k((px+7r%!^a+b89gvx10u")
+SECRET_KEY = os.getenv("SECRET_KEY") or os.getenv(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-d+ruqsbrs&hj13r(3h4f=inru_%0k((px+7r%!^a+b89gvx10u",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
+DEBUG = (os.getenv("DEBUG") or os.getenv("DJANGO_DEBUG", "true")).lower() == "true"
 
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,10.77.36.34").split(",")
 
@@ -104,16 +107,23 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "reccon"),
-        "USER": os.getenv("POSTGRES_USER", "reccon"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "reccon"),
-        "HOST": os.getenv("POSTGRES_HOST", "127.0.0.1"),
-        "PORT": os.getenv("POSTGRES_PORT", "5433"),
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=False)
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB", "reccon"),
+            "USER": os.getenv("POSTGRES_USER", "reccon"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", "reccon"),
+            "HOST": os.getenv("POSTGRES_HOST", "127.0.0.1"),
+            "PORT": os.getenv("POSTGRES_PORT", "5433"),
+        }
+    }
 
 AUTH_USER_MODEL = "users.User"
 
