@@ -1,0 +1,151 @@
+.drafts-page .inbox-right {
+  width: auto;
+  min-width: 290px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 20px;
+}
+
+.drafts-page .inbox-rightTop {
+  width: auto;
+  gap: 20px;
+}
+
+.drafts-deleteBtn {
+  min-width: 90px !important;
+  height: 42px !important;
+  color: var(--error) !important;
+  background: transparent !important;
+  border-color: var(--border) !important;
+}
+
+.drafts-deleteBtn * {
+  color: inherit !important;
+}
+
+.drafts-modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.35);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 16px;
+}
+
+.drafts-modal {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.drafts-modalTitle {
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+  line-height: 22px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.drafts-modalText {
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted, #6b7280);
+  margin-bottom: 14px;
+}
+
+.drafts-modalInfo {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.drafts-modalRow + .drafts-modalRow {
+  margin-top: 8px;
+}
+
+.drafts-modalLabel {
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text);
+  margin-right: 6px;
+}
+
+.drafts-modalValue {
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text);
+
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drafts-modalRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.drafts-modalLabel {
+  flex: 0 0 auto;
+}
+
+.drafts-modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mfp--drafts {
+  height: 104px;
+}
+
+.drafts-page .inbox-row {
+  cursor: pointer;
+}
+
+.drafts-open {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+
+  display: flex;
+  flex-direction: column;
+}
+
+.drafts-open__top {
+  width: min(1090px, 100%);
+  margin: 0 auto 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.drafts-open__backBtn {
+  min-width: auto !important;
+  height: auto !important;
+  padding: 12px 40px !important;
+  border-radius: 20px !important;
+  flex: 0 0 auto;
+}

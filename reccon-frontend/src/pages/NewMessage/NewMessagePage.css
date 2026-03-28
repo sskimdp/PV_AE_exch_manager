@@ -1,0 +1,364 @@
+.new-message {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+}
+
+.new-message__topCard {
+  width: min(1090px, 100%);
+  flex: 0 0 136px;
+  height: 136px;
+
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 20px;
+
+  box-sizing: border-box;
+  padding: 28px 40px 24px;
+}
+
+.new-message__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.new-message__row--subject {
+  margin-top: 24px;
+}
+
+.new-message__label {
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-weight: 500;
+  font-size: 20px;
+  line-height: 24px;
+  color: var(--muted, #63605b);
+  flex: 0 0 65px;
+}
+
+.new-message__recipient {
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 24px;
+  color: var(--primary);
+}
+
+.new-message__subjectInput {
+  flex: 1 1 auto;
+  min-width: 0;
+
+  border: 0;
+  outline: none;
+  background: transparent;
+
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 24px;
+  color: var(--text);
+}
+
+.new-message__editorCard {
+  width: min(1090px, 100%);
+  flex: 1 1 auto;
+  min-height: 0;
+
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+
+  box-sizing: border-box;
+  padding: 32px 38px 40px;
+
+  display: flex;
+  flex-direction: column;
+}
+
+.new-message__editorArea {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.new-message__editorWrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.new-message__placeholder {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted, #63605b);
+  pointer-events: none;
+  user-select: none;
+}
+
+.new-message__editor {
+  position: relative;
+  z-index: 1;
+
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+
+  outline: none;
+  border: 0;
+  background: transparent;
+
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text);
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.new-message__editor a {
+  color: var(--primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.new-message__editor::-webkit-scrollbar {
+  width: 4px;
+}
+
+.new-message__editor::-webkit-scrollbar-thumb {
+  background: #a3a3a3;
+  border-radius: 999px;
+}
+
+.new-message__editor::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.new-message__attachments {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.new-message__attachmentItem {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.new-message__attachmentFile {
+  height: 44px;
+  padding: 0 18px;
+  padding-right: 30px;
+
+  border: 0;
+  background: var(--border);
+  border-radius: 8px;
+
+  cursor: pointer;
+  user-select: none;
+
+  width: fit-content;
+  max-width: 400px;
+}
+
+.new-message__attachmentFileName {
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 400;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+
+.new-message__attachmentRemove {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+
+  background: #fff;
+  border: 0.5px solid #777777;
+  padding: 0;
+
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.new-message__attachmentRemove::before,
+.new-message__attachmentRemove::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 1.3px;
+  background: #777777;
+  border-radius: 2px;
+
+  top: 50%;
+  left: 50%;
+  transform-origin: center;
+}
+
+.new-message__attachmentRemove::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.new-message__attachmentRemove::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.new-message__attachmentBtn {
+  height: 44px !important;
+  background: var(--border) !important;
+  border-color: transparent !important;
+  color: var(--primary) !important;
+}
+
+.new-message__attachmentBtn * {
+  color: inherit !important;
+}
+
+.new-message__fileError {
+  margin-top: 10px;
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--error);
+}
+
+.new-message__footer {
+  margin-top: 24px;
+
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.new-message__footerLeft,
+.new-message__footerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.new-message__actionBtn {
+  min-width: 136px !important;
+  height: 44px !important;
+}
+
+.new-message__draftBtn,
+.new-message__sendBtn {
+  min-width: 98px !important;
+  height: 44px !important;
+}
+
+.new-message__hiddenInput {
+  display: none;
+}
+
+.new-message__modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.35);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.new-message__modal {
+  width: min(480px, calc(100vw - 32px));
+  min-height: 342px;
+
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+
+  box-sizing: border-box;
+  padding: 32px 40px 28px;
+
+  display: flex;
+  flex-direction: column;
+}
+
+.new-message__modalTitle {
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 24px;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.new-message__modalField + .new-message__modalField {
+  margin-top: 4px;
+}
+
+.new-message__modalLabel {
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.new-message__modalFooter {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.new-message__linkMarker {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1200px) {
+  .new-message__topCard,
+  .new-message__editorCard {
+    width: 100%;
+  }
+
+  .new-message__topCard {
+    padding: 24px 28px 20px;
+  }
+
+  .new-message__editorCard {
+    padding: 24px 28px 28px;
+  }
+}

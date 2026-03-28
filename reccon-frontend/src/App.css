@@ -1,0 +1,16 @@
+.demo {
+  padding: 48px;
+  display: flex;
+  gap: 48px;
+  align-items: flex-start;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.chips {
+  gap: 18px;
+}

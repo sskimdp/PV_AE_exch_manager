@@ -1,0 +1,227 @@
+.mfp {
+  width: 1090px;
+  height: 150px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-sizing: border-box;
+}
+
+.mfp-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.mfp-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.mfp-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.mfp-company {
+  width: 411px;
+  position: relative;
+}
+
+.mfp-select {
+  width: 411px;
+  height: 32px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.mfp-selectText {
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mfp-caret {
+  color: var(--primary);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.mfp-dropdown {
+  position: absolute;
+  top: 56px;
+  left: 0;
+  width: 411px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 50;
+}
+
+.mfp-dropdownHead {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mfp-dropdownInput {
+  flex: 1;
+  height: 28px;
+  border: 0;
+  outline: none;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.mfp-dropdownList {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.mfp-option {
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+
+  text-align: left;
+  padding: 0 12px;
+  border: 0;
+  background: #fff;
+  cursor: pointer;
+  color: var(--primary);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.cu-companyDropdownList::-webkit-scrollbar,
+.mfp-dropdownList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cu-companyDropdownList::-webkit-scrollbar-thumb,
+.mfp-dropdownList::-webkit-scrollbar-thumb {
+  background: #a3a3a3;
+  border-radius: 999px;
+}
+
+.cu-companyDropdownList::-webkit-scrollbar-track,
+.mfp-dropdownList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mfp-option:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.mfp-option.is-active {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.mfp-date {
+  width: 540px;
+}
+
+.mfp-dateRow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+
+   position: relative;
+  height: 32px;         
+  padding-right: 170px;    
+}
+
+.mfp-dateInputWrap .inputWrap {
+  gap: 0;
+  height: 32px;
+  align-items: center;
+}
+
+.mfp-arrow {
+  display: flex;
+  align-items: center;
+  margin: 0 14px; 
+  flex: 0 0 auto;
+}
+
+
+.mfp-dateInputWrap .input {
+  width: 96px !important;
+  height: 32px !important;
+  box-sizing: border-box !important;
+  color: var(--primary) !important;
+  padding: 0 !important;          
+  line-height: 32px !important;  
+  text-align: center;    
+  font-size: 12px;
+}
+
+.mfp-applyBtn {
+  position: absolute;
+  right: 0;
+  top: -12px;
+  margin-left: 0 !important;
+}
+
+.mfp-statusRow {
+  margin-top: 12px;
+  display: flex;
+  gap: 22px;
+}
+
+.mfp-statusBtn {
+  border-radius: 20px !important;
+  height: 40px !important;
+  padding: 10px 30px !important;
+  min-width: 0 !important;
+}
+
+.mfp-statusBtnText {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.mfp-statusBtnMain {
+  font-size: 14px;
+  line-height: 16px;
+}
+
+.mfp-statusBtnSub {
+  margin-top: 0px;
+  font-size: 11px;
+  line-height: 11px;
+}
+
+.mfp--noCompany .mfp-top{
+  justify-content: space-between;
+}
+
+.mfp--noCompany .mfp-date{
+  width: 100%;
+}
+
+.mfp--noCompany .mfp-dateRow{
+  justify-content: flex-start;
+}

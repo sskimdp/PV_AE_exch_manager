@@ -1,0 +1,36 @@
+.chip {
+  height: var(--chip-h);
+  padding: 10px 6px; 
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;  
+
+  border-radius: var(--r-pill);
+  font-size: 12px;
+  font-weight: 400;
+  border: 1px solid transparent;
+
+  width: fit-content;      
+  white-space: nowrap;     
+}
+
+.chip--pending {
+  color: var(--primary);
+  background: var(--primary-15);
+}
+
+.chip--confirmed {
+  color: var(--success);
+  background: var(--success-15);
+}
+
+.chip--read {
+  color: var(--warning);
+  background: var(--warning-15);
+}
+
+.chip--draft {
+  color: var(--draft-text);
+  background: var(--border);
+}

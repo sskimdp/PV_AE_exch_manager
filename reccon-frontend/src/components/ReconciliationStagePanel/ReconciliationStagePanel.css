@@ -1,0 +1,216 @@
+.recon-stage-panel {
+  width: 100%;
+  min-height: 112px;
+
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 24px;
+
+  padding: 14px 28px;
+  box-sizing: border-box;
+
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+}
+
+.recon-stage-panel__left {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+}
+
+.recon-stage-panel__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.recon-stage-panel__label {
+  color: var(--muted);
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
+.recon-stage-panel__value {
+  color: var(--text);
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 24px;
+}
+
+.recon-stage-panel__period {
+  color: var(--primary);
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 24px;
+}
+
+.recon-stage-panel__right {
+  flex: 0 0 auto;
+  width: 388px;
+  min-width: 388px;
+
+  display: grid;
+  grid-template-rows: auto 44px;
+  align-content: space-between;
+  justify-items: end;
+  row-gap: 14px;
+}
+
+.recon-stage-panel__stageText {
+  color: var(--muted);
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: right;
+}
+
+.recon-stage-panel__actions {
+  width: 100%;
+  display: grid;
+  align-items: center;
+  justify-content: end;
+  column-gap: 12px;
+}
+
+.recon-stage-panel__actions--slot1-prev.recon-stage-panel__actions--slot2-next {
+  grid-template-columns: 93px 93px 108px;
+}
+
+.recon-stage-panel__actions--slot1-prev.recon-stage-panel__actions--slot2-new {
+  grid-template-columns: 93px 125px 108px;
+}
+
+.recon-stage-panel__actions--slot1-prev.recon-stage-panel__actions--slot2-send {
+  grid-template-columns: 93px 170px 108px;
+}
+
+.recon-stage-panel__actions--slot1-empty.recon-stage-panel__actions--slot2-next,
+.recon-stage-panel__actions--slot1-empty.recon-stage-panel__actions--slot2-prev {
+  grid-template-columns: 0 93px 108px;
+}
+
+.recon-stage-panel__actions--slot1-empty.recon-stage-panel__actions--slot2-new {
+  grid-template-columns: 0 125px 108px;
+}
+
+.recon-stage-panel__actions--slot1-empty.recon-stage-panel__actions--slot2-send {
+  grid-template-columns: 0 170px 108px;
+}
+
+.recon-stage-panel__actions--slot1-empty.recon-stage-panel__actions--slot2-empty {
+  grid-template-columns: 0 0 108px;
+}
+
+.recon-stage-panel__actionSlot {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.recon-stage-panel__placeholder {
+  width: 100%;
+  height: 44px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.recon-stage-panel__newStageBtn {
+  width: 125px !important;
+  box-sizing: border-box;
+}
+
+.recon-stage-panel__sendBtn {
+  width: 170px !important;
+  min-width: 170px !important;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.recon-stage-panel__finishBtn,
+.recon-stage-panel__completedBadge {
+  width: 108px !important;
+  box-sizing: border-box;
+}
+
+.recon-stage-panel__finishBtn:not(:disabled) {
+  border-color: var(--error) !important;
+  color: var(--error) !important;
+}
+
+.recon-stage-panel__finishBtn:disabled {
+  background: var(--disabled-bg) !important;
+  color: var(--disabled-text) !important;
+  border-color: var(--disabled-bg) !important;
+}
+
+.recon-stage-panel__finishBtn,
+.recon-stage-panel__confirmBtn,
+.recon-stage-panel__completedBadge {
+  width: 108px !important;
+  box-sizing: border-box;
+}
+
+.recon-stage-panel__navBtn {
+  width: 93px !important;
+  min-width: 93px !important;
+  flex: 0 0 93px;
+  padding: 16px 12px !important;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.recon-stage-panel__finishBtn {
+  border-color: var(--error) !important;
+  color: var(--error) !important;
+}
+
+.recon-stage-panel__completedBadge {
+  width: 100%;
+  height: 44px;
+  border-radius: 8px;
+  box-sizing: border-box;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  background: var(--success-15);
+  color: var(--success);
+
+  font-family: Inter, system-ui, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .recon-stage-panel {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .recon-stage-panel__right {
+    width: 100%;
+    min-width: 0;
+    justify-items: end;
+  }
+
+  .recon-stage-panel__actions {
+    width: min(100%, 388px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

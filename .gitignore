@@ -1,0 +1,34 @@
+# Backend
+reccon-system-backend/.venv/
+reccon-system-backend/.vscode/
+reccon-system-backend/backend/.env
+reccon-system-backend/backend/backup_before_demo.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.log
+
+# Frontend
+reccon-frontend/node_modules/
+reccon-frontend/dist/
+reccon-frontend/build/
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+
+# OS / IDE 
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Dumps / backups
+*.sql
+*.dump
+*.bak
