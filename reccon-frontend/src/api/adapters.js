@@ -44,6 +44,16 @@ export const mapBackendUserToAppUser = (user) => {
     company: companyName,
     companyId,
     companyType: norm(rawCompanyType),
+    masterPartnerId:
+      user?.company?.master_partner_id ??
+      user?.master_partner_id ??
+      user?.masterPartnerId ??
+      null,
+    masterPartnerName:
+      user?.company?.master_partner_name ??
+      user?.master_partner_name ??
+      user?.masterPartnerName ??
+      '',
     isAdmin: Boolean(user?.is_company_admin),
     isCompanyAdmin: Boolean(user?.is_company_admin),
     avatarUrl:

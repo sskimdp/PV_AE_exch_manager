@@ -194,15 +194,20 @@ export default function NewMessagePage() {
   useEffect(() => {
     let cancelled = false;
 
+    const fallbackRecipientName =
+      user?.masterPartnerName ||
+      user?.company?.master_partner_name ||
+      "";
+
     const loadComposeMeta = async () => {
       try {
         const data = await messagesApi.getComposeMeta();
         if (cancelled) return;
-        setRecipientName(data?.recipientCompanyName || "");
+        setRecipientName(data?.recipientCompanyName || fallbackRecipientName);
       } catch (error) {
         if (cancelled) return;
         console.error("Не удалось загрузить данные для создания сообщения", error);
-        setRecipientName("");
+        setRecipientName(fallbackRecipientName);
       }
     };
 
@@ -212,7 +217,7 @@ export default function NewMessagePage() {
       cancelled = true;
       revokeLocalAttachmentUrls(attachmentsRef.current);
     };
-  }, []);
+  }, [user?.masterPartnerName, user?.company?.master_partner_name]);
 
   const syncEditorState = () => {
     const text = editorRef.current?.textContent || "";
