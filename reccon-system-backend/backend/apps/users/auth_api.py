@@ -26,6 +26,8 @@ class CurrentUserSerializer(serializers.Serializer):
             "name": obj.company.name,
             "company_type": obj.company.company_type,
             "is_active": obj.company.is_active,
+            "master_partner_id": obj.company.master_partner_id,
+            "master_partner_name": obj.company.master_partner.name if obj.company.master_partner_id else "",
         }
 
 

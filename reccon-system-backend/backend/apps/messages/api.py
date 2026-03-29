@@ -307,7 +307,10 @@ class MessageComposeMetaView(APIView):
         recipient_company_name = ""
         recipient_company_id = None
 
-        if company and company.company_type == Company.TYPE_SLAVE and company.master_partner_id:
+        if company and company.company_type == Company.TYPE_SLAVE:
+            if not company.master_partner_id:
+                raise PermissionDenied("Slave company has no master_partner configured.")
+
             recipient_company_name = company.master_partner.name
             recipient_company_id = company.master_partner.id
 
