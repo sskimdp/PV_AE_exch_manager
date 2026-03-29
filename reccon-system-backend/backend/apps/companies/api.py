@@ -189,13 +189,15 @@ class CompanyAdminWriteSerializer(serializers.Serializer):
             raise PermissionDenied("Only master company admins can edit companies.")
         if instance.company_type != Company.TYPE_SLAVE:
             raise PermissionDenied("Only slave companies can be edited from this screen.")
-        if instance.master_partner_id != current_user.company_id:
+        if instance.master_partner_id not in {None, current_user.company_id}:
             raise PermissionDenied("You can edit only your own partner companies.")
 
         admin_user = self._get_admin_user(instance)
         with transaction.atomic():
             instance.name = validated_data.get("name", instance.name)
-            instance.save(update_fields=["name"])
+            instance.company_type = Company.TYPE_SLAVE
+            instance.master_partner = current_user.company
+            instance.save(update_fields=["name", "company_type", "master_partner"])
 
             password = validated_data.get("adminPassword")
             if admin_user is None:

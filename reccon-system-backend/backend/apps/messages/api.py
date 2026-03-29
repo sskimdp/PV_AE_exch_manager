@@ -15,6 +15,7 @@ from apps.attachments.minio import delete_object, upload_fileobj
 from apps.attachments.models import Attachment
 from apps.audit.service import write_audit
 from apps.common.responses import ok
+from apps.companies.models import Company
 from apps.messages.models import Message
 from apps.messages.numbering import (
     generate_next_sender_number,
@@ -118,6 +119,13 @@ def attach_uploaded_files(*, request, message: Message, files):
         if created_ids:
             Attachment.objects.filter(id__in=created_ids).delete()
         raise
+
+
+def get_current_company_with_master(user):
+    if not user.company_id:
+        return None
+    return Company.objects.select_related("master_partner").filter(pk=user.company_id).first()
+
 
 def resolve_late_send_reconciliation(*, user, master_company, reconciliation_id):
     if reconciliation_id in (None, "", "null"):
@@ -262,15 +270,14 @@ class MessageComposeMetaView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
+        company = get_current_company_with_master(request.user)
+
         recipient_company_name = ""
         recipient_company_id = None
 
-        if user.company_id and getattr(user.company, "company_type", None) == "slave":
-            master = getattr(user.company, "master_partner", None)
-            if master is not None:
-                recipient_company_name = master.name
-                recipient_company_id = master.id
+        if company and company.company_type == Company.TYPE_SLAVE and company.master_partner_id:
+            recipient_company_name = company.master_partner.name
+            recipient_company_id = company.master_partner.id
 
         return ok(
             {
@@ -338,10 +345,12 @@ class MessageDraftViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         user = request.user
-        if not user.company or user.company.company_type != "slave":
+        company = get_current_company_with_master(user)
+
+        if not company or company.company_type != "slave":
             raise PermissionDenied("Only SLAVE company can create drafts.")
 
-        master = getattr(user.company, "master_partner", None)
+        master = company.master_partner
         if not master:
             raise PermissionDenied("Slave company has no master_partner configured.")
 
@@ -351,17 +360,17 @@ class MessageDraftViewSet(viewsets.ModelViewSet):
             request.data.get("html") or request.data.get("body_html") or ""
         )
         files = request.FILES.getlist("files") or request.FILES.getlist("file")
-        
+
         reconciliation_id = request.data.get("reconciliation_id")
         late_send_reconciliation = resolve_late_send_reconciliation(
             user=user,
             master_company=master,
             reconciliation_id=reconciliation_id,
         )
-        
+
         with transaction.atomic():
             message = Message.objects.create(
-                sender_company=user.company,
+                sender_company=company,
                 receiver_company=master,
                 late_send_reconciliation=late_send_reconciliation,
                 created_by=request.user,
@@ -469,7 +478,7 @@ class MessageDraftViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             if not draft.sender_number:
                 draft.sender_number = generate_next_sender_number(user.company)
-                
+
             if not draft.created_by_id:
                 draft.created_by = request.user
 
@@ -770,10 +779,12 @@ class SentViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["post"], url_path="compose")
     def compose(self, request):
         user = request.user
-        if not user.company or user.company.company_type != "slave":
+        company = get_current_company_with_master(user)
+
+        if not company or company.company_type != "slave":
             raise PermissionDenied("Only SLAVE can send messages.")
 
-        master = getattr(user.company, "master_partner", None)
+        master = company.master_partner
         if not master:
             raise PermissionDenied("Slave company has no master_partner configured.")
 
@@ -783,7 +794,7 @@ class SentViewSet(viewsets.ReadOnlyModelViewSet):
             request.data.get("html") or request.data.get("body_html") or ""
         )
         files = request.FILES.getlist("files") or request.FILES.getlist("file")
-        
+
         reconciliation_id = request.data.get("reconciliation_id")
         late_send_reconciliation = resolve_late_send_reconciliation(
             user=user,
@@ -793,11 +804,11 @@ class SentViewSet(viewsets.ReadOnlyModelViewSet):
 
         with transaction.atomic():
             message = Message.objects.create(
-                sender_company=user.company,
+                sender_company=company,
                 receiver_company=master,
                 late_send_reconciliation=late_send_reconciliation,
                 created_by=request.user,
-                sender_number=generate_next_sender_number(user.company),
+                sender_number=generate_next_sender_number(company),
                 status=Message.STATUS_PENDING,
                 subject=subject,
                 body=body,
