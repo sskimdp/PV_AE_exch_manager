@@ -1,53 +1,9 @@
-import { tokenStorage } from "./tokenStorage";
+import { request } from "./http";
 
 const MESSAGE_CHANGED_EVENT = "reccon:messages-changed";
 
 function emitMessagesChanged() {
   window.dispatchEvent(new CustomEvent(MESSAGE_CHANGED_EVENT));
-}
-
-function unwrapOk(payload) {
-  if (payload && typeof payload === "object" && "ok" in payload) {
-    return payload.data;
-  }
-  return payload;
-}
-
-async function request(path, options = {}) {
-  const token = tokenStorage.getAccessToken();
-  const headers = new Headers(options.headers || {});
-
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  const isFormData = options.body instanceof FormData;
-  if (!isFormData && options.body != null && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(path, {
-    ...options,
-    headers,
-  });
-
-  if (response.status === 204) {
-    return null;
-  }
-
-  const rawText = await response.text();
-  const data = rawText ? JSON.parse(rawText) : null;
-
-  if (!response.ok) {
-    const message =
-      data?.detail ||
-      data?.message ||
-      data?.error ||
-      (typeof data === "string" ? data : "Не удалось выполнить запрос.");
-    throw new Error(message);
-  }
-
-  return unwrapOk(data);
 }
 
 function buildComposeFormData(payload = {}) {
@@ -67,6 +23,22 @@ function buildComposeFormData(payload = {}) {
   }
 
   return formData;
+}
+
+function normalizeApiPath(path) {
+  const raw = String(path || "").trim();
+  if (!raw) return raw;
+
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    try {
+      const url = new URL(raw);
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      return raw;
+    }
+  }
+
+  return raw;
 }
 
 async function requestAndNotify(path, options = {}) {
@@ -110,7 +82,7 @@ export const messagesApi = {
   async confirmInboxMessage(messageId, receiverNumber) {
     return await requestAndNotify(`/api/messages/inbox/${messageId}/confirm/`, {
       method: "POST",
-      body: JSON.stringify({ receiver_number: receiverNumber }),
+      body: { receiver_number: receiverNumber },
     });
   },
 
@@ -146,7 +118,7 @@ export const messagesApi = {
   async updateDraft(draftId, patch) {
     return await request(`/api/messages/drafts/${draftId}/`, {
       method: "PATCH",
-      body: JSON.stringify(patch),
+      body: patch,
     });
   },
 
@@ -180,6 +152,6 @@ export const messagesApi = {
         ? attachment
         : attachment?.deleteUrl || `/api/attachments/attachments/${attachment?.id}/`;
 
-    await request(url, { method: "DELETE" });
+    await request(normalizeApiPath(url), { method: "DELETE" });
   },
 };
