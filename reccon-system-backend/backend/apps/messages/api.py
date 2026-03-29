@@ -124,7 +124,39 @@ def attach_uploaded_files(*, request, message: Message, files):
 def get_current_company_with_master(user):
     if not user.company_id:
         return None
-    return Company.objects.select_related("master_partner").filter(pk=user.company_id).first()
+
+    company = (
+        Company.objects.select_related("master_partner")
+        .filter(pk=user.company_id)
+        .first()
+    )
+    if company is None:
+        return None
+
+    if company.company_type != Company.TYPE_SLAVE:
+        return company
+
+    if company.master_partner_id:
+        return company
+
+    masters = list(
+        Company.objects.filter(
+            company_type=Company.TYPE_MASTER,
+            is_active=True,
+        ).order_by("id")[:2]
+    )
+
+    if len(masters) == 1:
+        company.master_partner = masters[0]
+        company.save(update_fields=["master_partner"])
+
+        company = (
+            Company.objects.select_related("master_partner")
+            .filter(pk=company.pk)
+            .first()
+        )
+
+    return company
 
 
 def resolve_late_send_reconciliation(*, user, master_company, reconciliation_id):
