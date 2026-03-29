@@ -54,7 +54,7 @@ export const messagesApi = {
 
   async getCounts() {
     return (
-      (await request("/api/messages/summary/")) || {
+      (await request("/messages/summary/")) || {
         inbox: 0,
         sent: 0,
         drafts: 0,
@@ -66,21 +66,21 @@ export const messagesApi = {
   },
 
   async getComposeMeta() {
-    return (await request("/api/messages/compose-meta/")) || {};
+    return (await request("/messages/compose-meta/")) || {};
   },
 
   async listInbox() {
-    return (await request("/api/messages/inbox/")) || [];
+    return (await request("/messages/inbox/")) || [];
   },
 
   async openInboxMessage(messageId) {
-    return await requestAndNotify(`/api/messages/inbox/${messageId}/open/`, {
+    return await requestAndNotify(`/messages/inbox/${messageId}/open/`, {
       method: "POST",
     });
   },
 
   async confirmInboxMessage(messageId, receiverNumber) {
-    return await requestAndNotify(`/api/messages/inbox/${messageId}/confirm/`, {
+    return await requestAndNotify(`/messages/inbox/${messageId}/confirm/`, {
       method: "POST",
       body: { receiver_number: receiverNumber },
     });
@@ -88,35 +88,35 @@ export const messagesApi = {
 
   async getNextIncomingNumber(messageId) {
     const data = await request(
-      `/api/messages/inbox/${messageId}/suggest-receiver-number/`
+      `/messages/inbox/${messageId}/suggest-receiver-number/`
     );
     return data?.suggested_receiver_number || "";
   },
 
   async listSent() {
-    return (await request("/api/messages/sent/")) || [];
+    return (await request("/messages/sent/")) || [];
   },
 
   async composeAndSend(payload) {
-    return await requestAndNotify("/api/messages/sent/compose/", {
+    return await requestAndNotify("/messages/sent/compose/", {
       method: "POST",
       body: buildComposeFormData(payload),
     });
   },
 
   async listDrafts() {
-    return (await request("/api/messages/drafts/")) || [];
+    return (await request("/messages/drafts/")) || [];
   },
 
   async createDraft(payload) {
-    return await requestAndNotify("/api/messages/drafts/", {
+    return await requestAndNotify("/messages/drafts/", {
       method: "POST",
       body: buildComposeFormData(payload),
     });
   },
 
   async updateDraft(draftId, patch) {
-    return await request(`/api/messages/drafts/${draftId}/`, {
+    return await request(`/messages/drafts/${draftId}/`, {
       method: "PATCH",
       body: patch,
     });
@@ -128,20 +128,20 @@ export const messagesApi = {
       formData.append("files", file);
     }
 
-    return await request(`/api/messages/drafts/${draftId}/attachments/`, {
+    return await request(`/messages/drafts/${draftId}/attachments/`, {
       method: "POST",
       body: formData,
     });
   },
 
   async sendDraft(draftId) {
-    return await requestAndNotify(`/api/messages/drafts/${draftId}/send/`, {
+    return await requestAndNotify(`/messages/drafts/${draftId}/send/`, {
       method: "POST",
     });
   },
 
   async deleteDraft(draftId) {
-    await requestAndNotify(`/api/messages/drafts/${draftId}/`, {
+    await requestAndNotify(`/messages/drafts/${draftId}/`, {
       method: "DELETE",
     });
   },
@@ -150,7 +150,7 @@ export const messagesApi = {
     const url =
       typeof attachment === "string"
         ? attachment
-        : attachment?.deleteUrl || `/api/attachments/attachments/${attachment?.id}/`;
+        : attachment?.deleteUrl || `/attachments/attachments/${attachment?.id}/`;
 
     await request(normalizeApiPath(url), { method: "DELETE" });
   },
