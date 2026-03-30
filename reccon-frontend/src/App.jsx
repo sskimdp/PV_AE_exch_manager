@@ -576,7 +576,7 @@ export default function App() {
 
                 setUser(null);
                 storage.setCurrentUser(null);
-                window.location.href = "/auth";
+                navigate("/auth", { replace: true });
               }}
             />
           }
