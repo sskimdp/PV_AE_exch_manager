@@ -1,5 +1,7 @@
 import uuid
+
 import boto3
+from botocore.config import Config
 from django.conf import settings
 
 
@@ -15,6 +17,10 @@ def get_s3_client():
         aws_access_key_id=settings.MINIO_ACCESS_KEY,
         aws_secret_access_key=settings.MINIO_SECRET_KEY,
         region_name="us-east-1",
+        config=Config(
+            signature_version="s3v4",
+            s3={"addressing_style": "path"},
+        ),
     )
 
 
