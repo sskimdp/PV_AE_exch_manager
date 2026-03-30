@@ -89,12 +89,17 @@ export default function DashboardPage() {
       setIsLoading(true);
 
       const payload = isMaster
-        ? await request("/messages/inbox/", {
-          query: { status_group: "unconfirmed" },
-        })
+        ? await messagesApi.listInbox()
         : await request("/messages/drafts/");
 
-      const items = extractList(payload)
+      const sourceItems = extractList(payload);
+      const items = (isMaster
+        ? sourceItems.filter((item) => {
+          const normalizedStatus = norm(item?.statusCode || item?.status);
+          return normalizedStatus === "pending" || normalizedStatus === "read";
+        })
+        : sourceItems
+      )
         .slice(0, 2)
         .map((item) => normalizeDashboardItem(item, isMaster));
 

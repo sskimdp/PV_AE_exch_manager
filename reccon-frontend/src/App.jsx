@@ -10,7 +10,10 @@ import {
 import { storage } from "./utils/storage";
 import { authApi } from "./api/authApi";
 import { tokenStorage } from "./api/tokenStorage";
-import { notificationsApi } from "./api/notificationsApi";
+import {
+  intervalLabelToMinutes,
+  notificationsApi,
+} from "./api/notificationsApi";
 import { messagesApi } from "./api/messagesApi";
 
 import AuthPage from "./pages/Auth/AuthPage";
@@ -155,7 +158,7 @@ function AppLayout({ user, onLogout, onAvatarChange, onCurrentUserUpdated }) {
     isMaster ? getSafeReminderSettings(user?.companyName) : null
   );
 
-  const shownReminderIdsRef = useRef(new Set());
+  const lastReminderShownAtRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -265,53 +268,16 @@ function AppLayout({ user, onLogout, onAvatarChange, onCurrentUserUpdated }) {
     };
   }, [isMaster, user?.companyName]);
 
-  const extractReminderCount = (notification) => {
-    const payloadCount = Number(
-      notification?.payload?.count ??
-      notification?.payload?.unconfirmed_count ??
-      notification?.payload?.unread_count
-    );
+  const showReminderNotification = (count) => {
+    const normalizedCount = Number(count) || 0;
+    if (normalizedCount <= 0) return;
 
-    if (Number.isFinite(payloadCount) && payloadCount > 0) {
-      return payloadCount;
-    }
-
-    const messageText = String(notification?.message || "");
-    const matchedCount = messageText.match(/(\d+)/);
-    return matchedCount ? Number(matchedCount[1]) : 0;
-  };
-
-  const showReminderNotification = async (notification) => {
-    const notificationId = notification?.id;
-    if (!notificationId) return;
-
-    const nextReminder = {
-      id: `system-reminder-${notificationId}`,
-      notificationId,
-      count: extractReminderCount(notification),
-      createdAt:
-        notification?.created_at ||
-        notification?.createdAt ||
-        new Date().toISOString(),
-    };
-
-    setActiveReminder((prev) =>
-      prev?.notificationId === notificationId ? prev : nextReminder
-    );
-
-    const reminderKey = String(notificationId);
-    if (shownReminderIdsRef.current.has(reminderKey)) {
-      return;
-    }
-
-    shownReminderIdsRef.current.add(reminderKey);
-
-    try {
-      await notificationsApi.markRead(notificationId);
-    } catch (error) {
-      console.error("Не удалось отметить напоминание прочитанным", error);
-      shownReminderIdsRef.current.delete(reminderKey);
-    }
+    lastReminderShownAtRef.current = Date.now();
+    setActiveReminder({
+      id: `system-reminder-${Date.now()}`,
+      count: normalizedCount,
+      createdAt: new Date().toISOString(),
+    });
   };
 
   const handleCloseReminder = () => {
@@ -325,32 +291,41 @@ function AppLayout({ user, onLogout, onAvatarChange, onCurrentUserUpdated }) {
       reminderSettings?.enabled && reminderSettings?.channels?.inside;
 
     if (!canShowInsideReminder) {
+      lastReminderShownAtRef.current = 0;
       setActiveReminder(null);
       return;
     }
 
     let cancelled = false;
 
+    const intervalMinutes = Number(
+      reminderSettings?.intervalMinutes ??
+      intervalLabelToMinutes(reminderSettings?.intervalLabel)
+    );
+    const reminderIntervalMs = Math.max(intervalMinutes, 1) * 60 * 1000;
+
     const syncReminderFromBackend = async () => {
       try {
-        const notifications = await notificationsApi.list();
+        const unreadCount = await notificationsApi.getUnreadCount();
 
         if (cancelled) return;
 
-        const latestUnreadReminder = notifications.find((item) => {
-          const type = String(item?.notif_type ?? item?.notifType ?? "")
-            .trim()
-            .toLowerCase();
-          const isRead = Boolean(item?.is_read ?? item?.isRead);
-          return type === "reminder" && !isRead;
-        });
+        const normalizedCount = Number(unreadCount) || 0;
 
-        if (!latestUnreadReminder) {
+        if (normalizedCount <= 0) {
+          lastReminderShownAtRef.current = 0;
           setActiveReminder(null);
           return;
         }
 
-        await showReminderNotification(latestUnreadReminder);
+        const now = Date.now();
+        const shouldShowReminder =
+          lastReminderShownAtRef.current === 0 ||
+          now - lastReminderShownAtRef.current >= reminderIntervalMs;
+
+        if (shouldShowReminder) {
+          showReminderNotification(normalizedCount);
+        }
       } catch (error) {
         if (cancelled) return;
         console.error("Не удалось синхронизировать напоминания", error);
@@ -371,7 +346,14 @@ function AppLayout({ user, onLogout, onAvatarChange, onCurrentUserUpdated }) {
       window.clearInterval(intervalId);
       window.removeEventListener("focus", handleWindowFocus);
     };
-  }, [isMaster, reminderSettings?.enabled, reminderSettings?.channels?.inside, user?.id]);
+  }, [
+    isMaster,
+    reminderSettings?.enabled,
+    reminderSettings?.channels?.inside,
+    reminderSettings?.intervalLabel,
+    reminderSettings?.intervalMinutes,
+    user?.id,
+  ]);
 
   const handleNavigate = (key) => {
     const map = {
