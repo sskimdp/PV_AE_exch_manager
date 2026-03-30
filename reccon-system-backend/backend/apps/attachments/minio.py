@@ -46,11 +46,16 @@ def upload_fileobj(fileobj, *, content_type: str, filename: str) -> tuple[str, i
     size = fileobj.tell()
     fileobj.seek(0)
 
-    extra = {}
+    put_kwargs = {
+        "Bucket": settings.MINIO_BUCKET,
+        "Key": key,
+        "Body": fileobj.read(),
+        "ContentLength": size,
+    }
     if content_type:
-        extra["ContentType"] = content_type
+        put_kwargs["ContentType"] = content_type
 
-    s3.upload_fileobj(fileobj, settings.MINIO_BUCKET, key, ExtraArgs=extra)
+    s3.put_object(**put_kwargs)
     return key, size
 
 
