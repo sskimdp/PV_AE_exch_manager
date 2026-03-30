@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import "./DashboardPage.css";
 import { Chip } from "../../components/Chip/Chip";
-import { tokenStorage } from "../../api/tokenStorage";
+import { request } from "../../api/http";
 import { messagesApi } from "../../api/messagesApi";
 
 const MESSAGE_CHANGED_EVENT =
@@ -59,34 +59,6 @@ const extractList = (payload) => {
   return [];
 };
 
-async function requestJson(url) {
-  const accessToken = tokenStorage.getAccessToken();
-
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-  });
-
-  if (!response.ok) {
-    let errorMessage = "Не удалось загрузить данные для дашборда.";
-    try {
-      const errorData = await response.json();
-      errorMessage =
-        errorData?.detail ||
-        errorData?.message ||
-        errorMessage;
-    } catch {
-      // ignore json parse errors
-    }
-    throw new Error(errorMessage);
-  }
-
-  return response.json();
-}
-
 export default function DashboardPage() {
   const { user, counts } = useOutletContext();
   const navigate = useNavigate();
@@ -116,11 +88,12 @@ export default function DashboardPage() {
     try {
       setIsLoading(true);
 
-      const url = isMaster
-        ? "/api/messages/inbox/?status_group=unconfirmed"
-        : "/api/messages/drafts/";
+      const payload = isMaster
+        ? await request("/messages/inbox/", {
+          query: { status_group: "unconfirmed" },
+        })
+        : await request("/messages/drafts/");
 
-      const payload = await requestJson(url);
       const items = extractList(payload)
         .slice(0, 2)
         .map((item) => normalizeDashboardItem(item, isMaster));
