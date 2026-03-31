@@ -194,21 +194,29 @@ LOGOUT_REDIRECT_URL = "/api/docs/"
 
 
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "127.0.0.1:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minio")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minio12345")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", os.getenv("MINIO_ROOT_USER", "minio"))
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", os.getenv("MINIO_ROOT_PASSWORD", "minio12345"))
 MINIO_BUCKET = os.getenv("MINIO_BUCKET", "attachments")
 MINIO_USE_SSL = os.getenv("MINIO_USE_SSL", "false").lower() == "true"
+MINIO_REGION = os.getenv("MINIO_REGION", "us-east-1")
+MINIO_VERIFY_SSL = os.getenv("MINIO_VERIFY_SSL", "true").lower() == "true"
+MINIO_CONNECT_TIMEOUT = int(os.getenv("MINIO_CONNECT_TIMEOUT", "10"))
+MINIO_READ_TIMEOUT = int(os.getenv("MINIO_READ_TIMEOUT", "30"))
+MINIO_MAX_RETRIES = int(os.getenv("MINIO_MAX_RETRIES", "2"))
 
 MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  #25мб
 ALLOWED_ATTACHMENT_CONTENT_TYPES = [
     "application/pdf",
     "image/png",
     "image/jpeg",
+    "image/webp",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/msword",
     "application/vnd.ms-excel",
     "text/plain",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/zip",
+    "application/x-zip-compressed",
 ]
 
 EMAIL_BACKEND = os.getenv(

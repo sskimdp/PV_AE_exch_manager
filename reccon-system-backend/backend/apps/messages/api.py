@@ -6,12 +6,16 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from apps.attachments.minio import delete_object, upload_fileobj
+from apps.attachments.minio import (
+    AttachmentStorageError,
+    delete_object,
+    upload_fileobj,
+)
 from apps.attachments.models import Attachment
 from apps.audit.service import write_audit
 from apps.common.responses import ok
@@ -26,6 +30,17 @@ from apps.messages.numbering import (
 from apps.outbox.service import write_outbox
 from apps.attachments.api import build_attachment_download_url
 from apps.reconciliations.models import Reconciliation
+
+
+
+class AttachmentStorageUnavailable(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = (
+        "Не удалось загрузить вложение в файловое хранилище. "
+        "Проверьте настройки MinIO и его доступность."
+    )
+    default_code = "attachment_storage_unavailable"
+
 
 STATUS_LABELS = {
     Message.STATUS_DRAFT: "Черновик",
@@ -78,7 +93,7 @@ def attach_uploaded_files(*, request, message: Message, files):
                 raise ValidationError("File type is not allowed.")
 
             storage_key, size = upload_fileobj(
-                file_obj.file,
+                file_obj,
                 content_type=content_type,
                 filename=file_obj.name,
             )
@@ -110,7 +125,7 @@ def attach_uploaded_files(*, request, message: Message, files):
                 event_type="attachment_attached",
                 payload={"attachment_id": attachment.id, "message_id": message.id},
             )
-    except Exception:
+    except Exception as exc:
         for storage_key in uploaded_keys:
             try:
                 delete_object(storage_key)
@@ -118,6 +133,8 @@ def attach_uploaded_files(*, request, message: Message, files):
                 pass
         if created_ids:
             Attachment.objects.filter(id__in=created_ids).delete()
+        if isinstance(exc, AttachmentStorageError):
+            raise AttachmentStorageUnavailable() from exc
         raise
 
 
