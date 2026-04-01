@@ -22,6 +22,76 @@ const ALLOWED_FILE_EXTENSIONS = [
 ];
 
 const FILE_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg,.webp,.zip";
+const COMPOSE_STORAGE_KEY_PREFIX = "reccon:new-message-compose";
+
+function getComposeStorageKey(userId, reconciliationId) {
+  return `${COMPOSE_STORAGE_KEY_PREFIX}:${userId || "anonymous"}:${reconciliationId || "default"
+    }`;
+}
+
+function readComposeState(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeComposeState(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function clearComposeState(key) {
+  localStorage.removeItem(key);
+}
+
+function isMeaningfulDraftContent({ text = "", attachments = [] } = {}) {
+  return String(text || "").trim().length > 0 || (attachments || []).length > 0;
+}
+
+function normalizeServerAttachment(attachment = {}) {
+  return {
+    id: attachment.id,
+    name: attachment.name || attachment.filename || "Файл",
+    filename: attachment.filename || attachment.name || "Файл",
+    size: attachment.size || 0,
+    status: attachment.status || "attached",
+    url: attachment.url || attachment.downloadUrl || "",
+    downloadUrl: attachment.downloadUrl || attachment.url || "",
+    deleteUrl: attachment.deleteUrl || "",
+    isLocal: false,
+  };
+}
+
+function toStoredAttachment(attachment) {
+  if (!attachment || attachment.isLocal) return null;
+  return {
+    id: attachment.id,
+    name: attachment.name || attachment.filename || "Файл",
+    filename: attachment.filename || attachment.name || "Файл",
+    size: attachment.size || 0,
+    status: attachment.status || "attached",
+    url: attachment.url || attachment.downloadUrl || "",
+    downloadUrl: attachment.downloadUrl || attachment.url || "",
+    deleteUrl: attachment.deleteUrl || "",
+  };
+}
+
+function buildSyncedSignature({ draftId, subject, text, html, attachments }) {
+  return JSON.stringify({
+    draftId: draftId || null,
+    subject: subject || "",
+    text: text || "",
+    html: html || "",
+    attachmentIds: (attachments || [])
+      .filter((attachment) => attachment && !attachment.isLocal)
+      .map((attachment) => String(attachment.id))
+      .sort(),
+  });
+}
 
 function getFileExtension(filename) {
   const parts = String(filename || "").toLowerCase().split(".");
@@ -167,15 +237,22 @@ export default function NewMessagePage() {
     location.state?.fromReconciliation && location.state?.reconciliationId
       ? Number(location.state.reconciliationId)
       : null;
+  const composeStorageKey = useMemo(
+    () => getComposeStorageKey(user?.id, reconciliationId),
+    [user?.id, reconciliationId]
+  );
 
   const isSlave = user?.companyType === "slave";
 
   const [recipientName, setRecipientName] = useState("");
   const [subject, setSubject] = useState("");
   const [editorText, setEditorText] = useState("");
+  const [editorHtml, setEditorHtml] = useState("");
   const [attachments, setAttachments] = useState([]);
+  const [draftId, setDraftId] = useState(null);
   const [fileError, setFileError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAutosaving, setIsAutosaving] = useState(false);
 
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
@@ -186,10 +263,92 @@ export default function NewMessagePage() {
   const fileInputRef = useRef(null);
   const linkMarkerIdRef = useRef(null);
   const attachmentsRef = useRef([]);
+  const subjectRef = useRef("");
+  const editorTextRef = useRef("");
+  const editorHtmlRef = useRef("");
+  const draftIdRef = useRef(null);
+  const syncPromiseRef = useRef(null);
+  const resyncRequestedRef = useRef(false);
+  const autosaveTimerRef = useRef(null);
+  const lastSyncedSignatureRef = useRef("");
+  const hasRestoredComposeStateRef = useRef(false);
+
+  useEffect(() => {
+    hasRestoredComposeStateRef.current = false;
+    const snapshot = readComposeState(composeStorageKey);
+
+    setSubject(snapshot?.subject || "");
+    setEditorText(snapshot?.text || "");
+    setEditorHtml(snapshot?.html || "");
+    setAttachments(
+      Array.isArray(snapshot?.attachments)
+        ? snapshot.attachments.map(normalizeServerAttachment)
+        : []
+    );
+    setDraftId(snapshot?.draftId || null);
+
+    if (snapshot?.recipientName) {
+      setRecipientName(snapshot.recipientName);
+    }
+
+    lastSyncedSignatureRef.current = snapshot?.draftId
+      ? buildSyncedSignature({
+        draftId: snapshot.draftId,
+        subject: snapshot.subject || "",
+        text: snapshot.text || "",
+        html: snapshot.html || "",
+        attachments: Array.isArray(snapshot.attachments)
+          ? snapshot.attachments.map(normalizeServerAttachment)
+          : [],
+      })
+      : "";
+
+    hasRestoredComposeStateRef.current = true;
+  }, [composeStorageKey]);
 
   useEffect(() => {
     attachmentsRef.current = attachments;
   }, [attachments]);
+
+  useEffect(() => {
+    subjectRef.current = subject;
+  }, [subject]);
+
+  useEffect(() => {
+    editorTextRef.current = editorText;
+  }, [editorText]);
+
+  useEffect(() => {
+    editorHtmlRef.current = editorHtml;
+  }, [editorHtml]);
+
+  useEffect(() => {
+    draftIdRef.current = draftId;
+  }, [draftId]);
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+    if (editorRef.current.innerHTML === editorHtml) return;
+
+    editorRef.current.innerHTML = editorHtml || "";
+    const nextText = editorRef.current.textContent || "";
+    if (nextText !== editorTextRef.current) {
+      setEditorText(nextText);
+    }
+  }, [editorHtml]);
+
+  useEffect(() => {
+    if (!hasRestoredComposeStateRef.current) return;
+
+    writeComposeState(composeStorageKey, {
+      draftId: draftId || null,
+      recipientName: recipientName || "",
+      subject,
+      text: editorText,
+      html: editorHtml,
+      attachments: attachments.map(toStoredAttachment).filter(Boolean),
+    });
+  }, [attachments, composeStorageKey, draftId, editorHtml, editorText, recipientName, subject]);
 
   useEffect(() => {
     let cancelled = false;
@@ -215,13 +374,136 @@ export default function NewMessagePage() {
 
     return () => {
       cancelled = true;
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+      }
       revokeLocalAttachmentUrls(attachmentsRef.current);
     };
   }, [user?.masterPartnerName, user?.company?.master_partner_name]);
 
   const syncEditorState = () => {
     const text = editorRef.current?.textContent || "";
+    const html = editorRef.current?.innerHTML || "";
     setEditorText(text);
+    setEditorHtml(html);
+  };
+
+  const applyDraftResponse = (draft) => {
+    if (!draft) return null;
+
+    const nextAttachments = Array.isArray(draft.attachments)
+      ? draft.attachments.map(normalizeServerAttachment)
+      : [];
+
+    setDraftId(draft.id);
+    draftIdRef.current = draft.id;
+    setFileError("");
+
+    setAttachments((prev) => {
+      revokeLocalAttachmentUrls(prev.filter((attachment) => attachment?.isLocal));
+      return nextAttachments;
+    });
+
+    lastSyncedSignatureRef.current = buildSyncedSignature({
+      draftId: draft.id,
+      subject: subjectRef.current,
+      text: editorRef.current?.textContent || editorTextRef.current,
+      html: editorRef.current?.innerHTML || editorHtmlRef.current,
+      attachments: nextAttachments,
+    });
+
+    return draft.id;
+  };
+
+  const getCurrentComposeState = () => ({
+    draftId: draftIdRef.current,
+    subject: subjectRef.current,
+    text: editorRef.current?.textContent || editorTextRef.current || "",
+    html: editorRef.current?.innerHTML || editorHtmlRef.current || "",
+    attachments: attachmentsRef.current || [],
+  });
+
+  const syncDraftNow = async ({ force = false } = {}) => {
+    if (!isSlave) return null;
+
+    if (syncPromiseRef.current) {
+      resyncRequestedRef.current = true;
+      return syncPromiseRef.current;
+    }
+
+    const currentState = getCurrentComposeState();
+
+    if (!isMeaningfulDraftContent(currentState)) {
+      return currentState.draftId || null;
+    }
+
+    const localAttachments = currentState.attachments.filter(
+      (attachment) => attachment?.isLocal && attachment?.file
+    );
+    const currentSignature = buildSyncedSignature(currentState);
+
+    if (
+      !force &&
+      currentState.draftId &&
+      localAttachments.length === 0 &&
+      currentSignature === lastSyncedSignatureRef.current
+    ) {
+      return currentState.draftId;
+    }
+
+    syncPromiseRef.current = (async () => {
+      setIsAutosaving(true);
+
+      try {
+        let draft;
+
+        if (!currentState.draftId) {
+          draft = await messagesApi.createDraft({
+            subject: currentState.subject,
+            text: currentState.text,
+            html: currentState.html,
+            attachments: currentState.attachments,
+            reconciliationId,
+          });
+        } else {
+          draft = await messagesApi.updateDraft(currentState.draftId, {
+            subject: currentState.subject,
+            text: currentState.text,
+            html: currentState.html,
+          });
+
+          if (localAttachments.length > 0) {
+            draft = await messagesApi.uploadDraftAttachments(
+              currentState.draftId,
+              localAttachments.map((attachment) => attachment.file)
+            );
+          }
+        }
+
+        return applyDraftResponse(draft);
+      } catch (error) {
+        if (error?.status === 404) {
+          setDraftId(null);
+          draftIdRef.current = null;
+          lastSyncedSignatureRef.current = "";
+        }
+
+        setFileError(error.message || "Не удалось сохранить черновик.");
+        throw error;
+      } finally {
+        setIsAutosaving(false);
+        syncPromiseRef.current = null;
+
+        if (resyncRequestedRef.current) {
+          resyncRequestedRef.current = false;
+          window.setTimeout(() => {
+            syncDraftNow({ force: true }).catch(() => { });
+          }, 0);
+        }
+      }
+    })();
+
+    return syncPromiseRef.current;
   };
 
   const removeLinkMarker = () => {
@@ -418,6 +700,9 @@ export default function NewMessagePage() {
 
     if (valid.length > 0) {
       setAttachments((prev) => [...prev, ...valid]);
+      window.setTimeout(() => {
+        syncDraftNow({ force: true }).catch(() => { });
+      }, 0);
     }
 
     e.target.value = "";
@@ -427,28 +712,70 @@ export default function NewMessagePage() {
     openAttachmentFile(attachment);
   };
 
-  const handleAttachmentRemove = (attachmentId) => {
+  const handleAttachmentRemove = async (attachmentId) => {
+    const toRemove = attachmentsRef.current.find((item) => item.id === attachmentId);
+
     setAttachments((prev) => {
-      const toRemove = prev.find((item) => item.id === attachmentId);
-      if (toRemove?.isLocal && toRemove?.url) {
+      const target = prev.find((item) => item.id === attachmentId);
+      if (target?.isLocal && target?.url) {
         try {
-          URL.revokeObjectURL(toRemove.url);
+          URL.revokeObjectURL(target.url);
         } catch { }
       }
       return prev.filter((item) => item.id !== attachmentId);
     });
+
+    if (!toRemove || toRemove.isLocal) {
+      return;
+    }
+
+    try {
+      await messagesApi.deleteAttachment(toRemove);
+      lastSyncedSignatureRef.current = "";
+    } catch (error) {
+      console.error("Не удалось удалить вложение", error);
+      setFileError(error.message || "Не удалось удалить вложение.");
+    }
   };
 
+  useEffect(() => {
+    if (!isSlave) return;
+
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+
+    if (!isMeaningfulDraftContent({ text: editorText, attachments })) {
+      return;
+    }
+
+    autosaveTimerRef.current = window.setTimeout(() => {
+      syncDraftNow().catch(() => { });
+    }, 1200);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [attachments, editorText, isSlave, reconciliationId, subject]);
+
   const resetForm = () => {
-    revokeLocalAttachmentUrls(attachments);
+    revokeLocalAttachmentUrls(attachmentsRef.current);
     setSubject("");
     setEditorText("");
+    setEditorHtml("");
     setAttachments([]);
+    setDraftId(null);
     setFileError("");
+    setIsAutosaving(false);
     setIsLinkModalOpen(false);
     setLinkUrl("");
     setLinkText("");
     setLinkError("");
+    draftIdRef.current = null;
+    lastSyncedSignatureRef.current = "";
+    clearComposeState(composeStorageKey);
 
     if (editorRef.current) {
       editorRef.current.innerHTML = "";
@@ -460,13 +787,7 @@ export default function NewMessagePage() {
 
     try {
       setIsSubmitting(true);
-      await messagesApi.createDraft({
-        subject,
-        text: editorRef.current?.textContent || "",
-        html: editorRef.current?.innerHTML || "",
-        attachments,
-        reconciliationId,
-      });
+      await syncDraftNow({ force: true });
 
       resetForm();
       navigate("/drafts");
@@ -483,13 +804,19 @@ export default function NewMessagePage() {
 
     try {
       setIsSubmitting(true);
-      await messagesApi.composeAndSend({
-        subject,
-        text: editorRef.current?.textContent || "",
-        html: editorRef.current?.innerHTML || "",
-        attachments,
-        reconciliationId,
-      });
+      const currentDraftId = await syncDraftNow({ force: true });
+
+      if (currentDraftId) {
+        await messagesApi.sendDraft(currentDraftId);
+      } else {
+        await messagesApi.composeAndSend({
+          subject: subjectRef.current,
+          text: editorRef.current?.textContent || editorTextRef.current || "",
+          html: editorRef.current?.innerHTML || editorHtmlRef.current || "",
+          attachments: attachmentsRef.current,
+          reconciliationId,
+        });
+      }
 
       resetForm();
       navigate("/sent");

@@ -42,6 +42,33 @@ class AttachmentStorageUnavailable(APIException):
     default_code = "attachment_storage_unavailable"
 
 
+class AccountDeactivated(APIException):
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = {
+        "code": "ACCOUNT_DEACTIVATED",
+        "detail": "Вы были деактивированы от системы",
+    }
+    default_code = "account_deactivated"
+
+
+def ensure_user_and_company_active(user):
+    if not user or not user.is_authenticated:
+        return
+
+    if not user.is_active:
+        raise AccountDeactivated()
+
+    company = getattr(user, "company", None)
+    if company and not company.is_active:
+        raise AccountDeactivated()
+
+
+class ActiveUserCompanyRequiredMixin:
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        ensure_user_and_company_active(getattr(request, "user", None))
+
+
 STATUS_LABELS = {
     Message.STATUS_DRAFT: "Черновик",
     Message.STATUS_PENDING: "Ожидает подтверждения",
@@ -315,7 +342,7 @@ class InboxConfirmSerializer(serializers.Serializer):
     receiver_number = serializers.CharField(max_length=16)
 
 
-class MessageComposeMetaView(APIView):
+class MessageComposeMetaView(ActiveUserCompanyRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -339,7 +366,7 @@ class MessageComposeMetaView(APIView):
         )
 
 
-class MessageSummaryView(APIView):
+class MessageSummaryView(ActiveUserCompanyRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -379,7 +406,7 @@ class MessageSummaryView(APIView):
         )
 
 
-class MessageDraftViewSet(viewsets.ModelViewSet):
+class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet):
     serializer_class = DraftSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
@@ -582,7 +609,7 @@ class MessageDraftViewSet(viewsets.ModelViewSet):
         return ok(serializer.data, status=status.HTTP_201_CREATED)
 
 
-class InboxViewSet(viewsets.ReadOnlyModelViewSet):
+class InboxViewSet(ActiveUserCompanyRequiredMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = InboxSerializer
     permission_classes = [IsAuthenticated]
 
@@ -768,7 +795,7 @@ class InboxViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
-class SentViewSet(viewsets.ReadOnlyModelViewSet):
+class SentViewSet(ActiveUserCompanyRequiredMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = SentSerializer
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser, MultiPartParser, FormParser]

@@ -1,13 +1,41 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import APIException, AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.common.responses import ok
+from apps.users.models import User
+
+
+class AccountDeactivated(APIException):
+    status_code = 403
+    default_detail = {
+        "code": "ACCOUNT_DEACTIVATED",
+        "detail": "Вы были деактивированы от системы",
+    }
+    default_code = "account_deactivated"
+
+
+def ensure_user_and_company_active(user):
+    if not user or not user.is_authenticated:
+        return
+
+    if not user.is_active:
+        raise AccountDeactivated()
+
+    company = getattr(user, "company", None)
+    if company and not company.is_active:
+        raise AccountDeactivated()
+
+
+class ActiveUserCompanyRequiredMixin:
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        ensure_user_and_company_active(getattr(request, "user", None))
 
 
 class CurrentUserSerializer(serializers.Serializer):
@@ -71,11 +99,32 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         }
 
 
+class CustomTokenRefreshSerializer(TokenRefreshSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        refresh_token = RefreshToken(attrs["refresh"])
+        user = (
+            User.objects.select_related("company")
+            .filter(pk=refresh_token.get("user_id"))
+            .first()
+        )
+        if user is None:
+            raise AuthenticationFailed("User not found.")
+
+        ensure_user_and_company_active(user)
+        return data
+
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
-class MeView(APIView):
+class CustomTokenRefreshView(TokenRefreshView):
+    serializer_class = CustomTokenRefreshSerializer
+
+
+class MeView(ActiveUserCompanyRequiredMixin, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(responses={200: CurrentUserSerializer})

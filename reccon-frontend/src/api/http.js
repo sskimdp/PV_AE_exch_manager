@@ -1,6 +1,8 @@
 import { API_BASE_URL } from "./config";
 import { tokenStorage } from "./tokenStorage";
 
+export const ACCOUNT_DEACTIVATED_EVENT = "reccon:account-deactivated";
+
 class ApiError extends Error {
   constructor(message, { status = 500, details = null } = {}) {
     super(message);
@@ -51,6 +53,19 @@ const extractErrorMessage = (payload, fallback) => {
 
   if (typeof firstValue === "string") return firstValue;
   return fallback;
+};
+
+const emitAccountDeactivated = (payload = null) => {
+  if (typeof window === "undefined") return;
+
+  window.dispatchEvent(
+    new CustomEvent(ACCOUNT_DEACTIVATED_EVENT, {
+      detail: payload || {
+        code: "ACCOUNT_DEACTIVATED",
+        detail: "Вы были деактивированы от системы",
+      },
+    })
+  );
 };
 
 const refreshAccessToken = async () => {
@@ -126,6 +141,9 @@ export const request = async (path, options = {}) => {
   if (raw) {
     if (!response.ok) {
       const payload = await tryParseJson(response);
+      if (response.status === 403 && payload?.code === "ACCOUNT_DEACTIVATED") {
+        emitAccountDeactivated(payload);
+      }
       throw new ApiError(extractErrorMessage(payload, 'Ошибка запроса.'), {
         status: response.status,
         details: payload,
@@ -137,6 +155,10 @@ export const request = async (path, options = {}) => {
   const payload = await tryParseJson(response);
 
   if (!response.ok) {
+    if (response.status === 403 && payload?.code === "ACCOUNT_DEACTIVATED") {
+      emitAccountDeactivated(payload);
+    }
+
     throw new ApiError(extractErrorMessage(payload, 'Ошибка запроса.'), {
       status: response.status,
       details: payload,

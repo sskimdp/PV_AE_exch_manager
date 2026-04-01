@@ -3,6 +3,9 @@ reccon-system-backend/.venv/
 reccon-system-backend/.vscode/
 reccon-system-backend/backend/.env
 reccon-system-backend/backend/backup_before_demo.json
+reccon-system-backend/backend/demo_render.json
+reccon-system-backend/force_delete_two_companies_render.py
+reccon-system-backend/list_companies_render.py
 
 # Python cache
 __pycache__/

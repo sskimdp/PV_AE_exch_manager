@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import { storage } from "./utils/storage";
 import { authApi } from "./api/authApi";
+import { ACCOUNT_DEACTIVATED_EVENT } from "./api/http";
 import { tokenStorage } from "./api/tokenStorage";
 import {
   intervalLabelToMinutes,
@@ -434,8 +435,100 @@ function AppLayout({ user, onLogout, onAvatarChange, onCurrentUserUpdated }) {
 }
 
 export default function App() {
+  const navigate = useNavigate();
   const [user, setUser] = useState(getInitialUser);
   const [isBootstrappingAuth, setIsBootstrappingAuth] = useState(true);
+  const [isDeactivatedModalOpen, setIsDeactivatedModalOpen] = useState(false);
+
+  const forceLogout = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      authApi.clearSession();
+    }
+
+    setIsDeactivatedModalOpen(false);
+    setUser(null);
+    storage.setCurrentUser(null);
+    navigate("/auth", { replace: true });
+  };
+
+  useEffect(() => {
+    const handleAccountDeactivated = () => {
+      if (!tokenStorage.getAccessToken()) return;
+      setIsDeactivatedModalOpen(true);
+    };
+
+    window.addEventListener(ACCOUNT_DEACTIVATED_EVENT, handleAccountDeactivated);
+    return () => {
+      window.removeEventListener(
+        ACCOUNT_DEACTIVATED_EVENT,
+        handleAccountDeactivated
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setIsDeactivatedModalOpen(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const checkSessionStatus = async () => {
+      try {
+        const { user: backendUser, appUser } = await authApi.me();
+        if (cancelled) return;
+
+        if (backendUser?.is_active === false || backendUser?.company?.is_active === false) {
+          setIsDeactivatedModalOpen(true);
+          return;
+        }
+
+        setUser((prev) => {
+          if (!prev) return prev;
+
+          const next = {
+            ...prev,
+            ...appUser,
+            avatarUrl: resolveAvatarUrl(appUser, resolveAvatarUrl(prev)),
+            avatarDataUrl: resolveAvatarDataUrl(appUser, resolveAvatarDataUrl(prev)),
+          };
+
+          storage.setCurrentUser(next);
+          return next;
+        });
+      } catch (error) {
+        if (cancelled) return;
+        if (error?.details?.code === "ACCOUNT_DEACTIVATED") {
+          setIsDeactivatedModalOpen(true);
+        }
+      }
+    };
+
+    checkSessionStatus();
+
+    const intervalId = window.setInterval(checkSessionStatus, 30000);
+    const handleWindowFocus = () => {
+      checkSessionStatus();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkSessionStatus();
+      }
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -557,47 +650,108 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/auth" element={<AuthPage onLogin={handleLogin} />} />
+    <>
+      <Routes>
+        <Route path="/auth" element={<AuthPage onLogin={handleLogin} />} />
 
-      <Route element={<ProtectedRoute user={user} />}>
-        <Route
-          element={
-            <AppLayout
-              user={user}
-              onAvatarChange={handleAvatarChange}
-              onCurrentUserUpdated={handleCurrentUserUpdated}
-              onLogout={async () => {
-                try {
-                  await authApi.logout();
-                } catch {
-                  authApi.clearSession();
-                }
-
-                setUser(null);
-                storage.setCurrentUser(null);
-                navigate("/auth", { replace: true });
-              }}
-            />
-          }
-        >
-          <Route index element={<DashboardPage />} />
-          <Route path="inbox" element={<InboxPage />} />
-          <Route path="sent" element={<SentPage />} />
-          <Route path="drafts" element={<DraftsPage />} />
-          <Route path="reconciliation" element={<ReconciliationPage />} />
+        <Route element={<ProtectedRoute user={user} />}>
           <Route
-            path="reconciliation/:id"
-            element={<ReconciliationDetailsPage />}
-          />
-          <Route path="admin" element={<AdminPage />} />
-          <Route path="messages/new" element={<NewMessagePage />} />
-          <Route path="admin/companies/new" element={<CreateCompanyPage />} />
-          <Route path="admin/users/new" element={<CreateUserPage />} />
+            element={
+              <AppLayout
+                user={user}
+                onAvatarChange={handleAvatarChange}
+                onCurrentUserUpdated={handleCurrentUserUpdated}
+                onLogout={forceLogout}
+              />
+            }
+          >
+            <Route index element={<DashboardPage />} />
+            <Route path="inbox" element={<InboxPage />} />
+            <Route path="sent" element={<SentPage />} />
+            <Route path="drafts" element={<DraftsPage />} />
+            <Route path="reconciliation" element={<ReconciliationPage />} />
+            <Route
+              path="reconciliation/:id"
+              element={<ReconciliationDetailsPage />}
+            />
+            <Route path="admin" element={<AdminPage />} />
+            <Route path="messages/new" element={<NewMessagePage />} />
+            <Route path="admin/companies/new" element={<CreateCompanyPage />} />
+            <Route path="admin/users/new" element={<CreateUserPage />} />
+          </Route>
         </Route>
-      </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+
+      {isDeactivatedModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(17, 24, 39, 0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 5000,
+            padding: 24,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              background: "#FFFFFF",
+              borderRadius: 20,
+              boxShadow: "0 20px 40px rgba(15, 23, 42, 0.18)",
+              padding: 24,
+              display: "flex",
+              flexDirection: "column",
+              gap: 20,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 20,
+                fontWeight: 700,
+                lineHeight: 1.3,
+                color: "#111827",
+              }}
+            >
+              Вы были деактивированы от системы
+            </div>
+
+            <div
+              style={{
+                fontSize: 15,
+                lineHeight: 1.5,
+                color: "#4B5563",
+              }}
+            >
+              Для продолжения работы необходимо войти в систему снова после повторной активации.
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={forceLogout}
+                style={{
+                  border: "none",
+                  borderRadius: 12,
+                  background: "#2F6BFF",
+                  color: "#FFFFFF",
+                  padding: "12px 24px",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Выход
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
