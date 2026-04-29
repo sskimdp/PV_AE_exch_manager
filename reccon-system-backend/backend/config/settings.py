@@ -35,7 +35,7 @@ DEBUG = (os.getenv("DEBUG") or os.getenv("DJANGO_DEBUG", "true")).lower() == "tr
 
 ALLOWED_HOSTS = os.getenv(
     "DJANGO_ALLOWED_HOSTS",
-    "127.0.0.1,localhost,.onrender.com",
+    "127.0.0.1,localhost,.railway.app",
 ).split(",")
 
 CORS_ALLOWED_ORIGINS = [
