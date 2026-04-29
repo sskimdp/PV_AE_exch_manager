@@ -11,4 +11,9 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    allowedHosts: [
+      "reccon-frontend-production.up.railway.app",
+    ],
+  },
 });
