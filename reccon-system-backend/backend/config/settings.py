@@ -38,14 +38,15 @@ ALLOWED_HOSTS = os.getenv(
     "127.0.0.1,localhost,.railway.app",
 ).split(",")
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://10.22.28.241:5173",
-    "https://reccon-frontend.onrender.com"
-]
+CORS_ALLOWED_ORIGINS = os.getenv(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173",
+).split(",")
+
+CSRF_TRUSTED_ORIGINS = os.getenv(
+    "CSRF_TRUSTED_ORIGINS",
+    "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173",
+).split(",")
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "authorization",
