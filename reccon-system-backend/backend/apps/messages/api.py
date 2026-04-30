@@ -475,12 +475,17 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
                 event_type="message_draft_created",
                 entity_type="message",
                 entity_id=message.id,
-                payload={
+                old_values={},
+                new_values={
                     "status": message.status,
                     "sender_company_id": message.sender_company_id,
                     "receiver_company_id": message.receiver_company_id,
                     "subject": message.subject,
+                    "created_by_id": message.created_by_id,
+                    "created_by_username": request.user.username,
                 },
+                reason="draft created by user",
+                request=request,
             )
             write_outbox(
                 event_type="message_draft_created",
@@ -520,22 +525,25 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
             changed = True
 
         if changed:
-            draft.save(update_fields=["subject", "body", "body_html", "updated_at"])
+            new_values = {
+                "subject": draft.subject,
+                "body": draft.body,
+                "body_html": draft.body_html,
+            }
 
-            write_audit(
-                actor=request.user,
-                event_type="message_draft_updated",
-                entity_type="message",
-                entity_id=draft.id,
-                old_values=old_values,
-                new_values={
-                    "subject": draft.subject,
-                    "body": draft.body,
-                    "body_html": draft.body_html,
-                },
-                reason="draft updated by user",
-                request=request,
-            )
+            if old_values != new_values:
+                draft.save(update_fields=["subject", "body", "body_html", "updated_at"])
+
+                write_audit(
+                    actor=request.user,
+                    event_type="message_draft_updated",
+                    entity_type="message",
+                    entity_id=draft.id,
+                    old_values=old_values,
+                    new_values=new_values,
+                    reason="draft updated by user",
+                    request=request,
+                )
 
         serializer = self.get_serializer(draft, context={"request": request})
         return ok(serializer.data)
