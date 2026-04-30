@@ -427,8 +427,27 @@ export default function NewMessagePage() {
     if (!isSlave) return null;
 
     if (syncPromiseRef.current) {
-      resyncRequestedRef.current = true;
-      return syncPromiseRef.current;
+      const syncedDraftId = await syncPromiseRef.current;
+
+      const latestState = getCurrentComposeState();
+      const localAttachments = latestState.attachments.filter(
+        (attachment) => attachment?.isLocal && attachment?.file
+      );
+      const latestSignature = buildSyncedSignature(latestState);
+
+      if (
+        !force ||
+        !latestState.draftId ||
+        localAttachments.length > 0 ||
+        latestSignature !== lastSyncedSignatureRef.current
+      ) {
+        resyncRequestedRef.current = true;
+        window.setTimeout(() => {
+          syncDraftNow({ force: true }).catch(() => {});
+        }, 0);
+      }
+
+      return syncedDraftId;
     }
 
     const currentState = getCurrentComposeState();
@@ -497,7 +516,7 @@ export default function NewMessagePage() {
         if (resyncRequestedRef.current) {
           resyncRequestedRef.current = false;
           window.setTimeout(() => {
-            syncDraftNow({ force: true }).catch(() => { });
+            syncDraftNow({ force: true }).catch(() => {});
           }, 0);
         }
       }
