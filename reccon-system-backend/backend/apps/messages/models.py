@@ -64,6 +64,17 @@ class Message(models.Model):
     read_at = models.DateTimeField(null=True, blank=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
 
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deleted_messages",
+    )
+    delete_reason = models.CharField(max_length=255, blank=True, default="")
+
     class Meta:
         constraints = [
             models.UniqueConstraint(

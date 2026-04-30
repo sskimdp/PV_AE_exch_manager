@@ -378,14 +378,18 @@ class MessageSummaryView(ActiveUserCompanyRequiredMixin, APIView):
         if user.company_id:
             if user.company.company_type == "master":
                 inbox_queryset = Message.objects.filter(
-                    receiver_company_id=user.company_id
+                receiver_company_id=user.company_id,
+                is_deleted=False,
                 ).exclude(status=Message.STATUS_DRAFT)
                 inbox = inbox_queryset.count()
                 inbox_unconfirmed = inbox_queryset.filter(
                     status__in=[Message.STATUS_PENDING, Message.STATUS_READ]
                 ).count()
             elif user.company.company_type == "slave":
-                sent_queryset = Message.objects.filter(sender_company_id=user.company_id)
+                sent_queryset = Message.objects.filter(
+                    sender_company_id=user.company_id,
+                    is_deleted=False,
+                )
                 drafts = sent_queryset.filter(status=Message.STATUS_DRAFT).count()
                 sent = sent_queryset.exclude(status=Message.STATUS_DRAFT).count()
                 sent_unconfirmed = sent_queryset.filter(
@@ -418,7 +422,11 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
         return (
             Message.objects.select_related("sender_company", "receiver_company")
             .prefetch_related("attachments")
-            .filter(sender_company=user.company, status=Message.STATUS_DRAFT)
+            .filter(
+                sender_company=user.company,
+                status=Message.STATUS_DRAFT,
+                is_deleted=False,
+            )
             .order_by("-created_at")
         )
 
@@ -495,6 +503,11 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
         subject = request.data.get("subject")
         body = request.data.get("text")
         body_html = request.data.get("html")
+        old_values = {
+            "subject": draft.subject,
+            "body": draft.body,
+            "body_html": draft.body_html,
+        }
 
         if subject is not None:
             draft.subject = str(subject)
@@ -508,6 +521,21 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
 
         if changed:
             draft.save(update_fields=["subject", "body", "body_html", "updated_at"])
+
+            write_audit(
+                actor=request.user,
+                event_type="message_draft_updated",
+                entity_type="message",
+                entity_id=draft.id,
+                old_values=old_values,
+                new_values={
+                    "subject": draft.subject,
+                    "body": draft.body,
+                    "body_html": draft.body_html,
+                },
+                reason="draft updated by user",
+                request=request,
+            )
 
         serializer = self.get_serializer(draft, context={"request": request})
         return ok(serializer.data)
@@ -525,21 +553,42 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
             raise PermissionDenied("You can delete only your own drafts.")
 
         with transaction.atomic():
-            attachment_keys = list(draft.attachments.values_list("storage_key", flat=True))
-            message_id = draft.id
-            draft.delete()
-            for storage_key in attachment_keys:
-                try:
-                    delete_object(storage_key)
-                except Exception:
-                    pass
+            old_values = {
+                "status": draft.status,
+                "subject": draft.subject,
+                "body": draft.body,
+                "body_html": draft.body_html,
+                "is_deleted": draft.is_deleted,
+            }
+
+            draft.is_deleted = True
+            draft.deleted_at = timezone.now()
+            draft.deleted_by = request.user
+            draft.delete_reason = "draft deleted by user"
+            draft.save(
+                update_fields=[
+                    "is_deleted",
+                    "deleted_at",
+                    "deleted_by",
+                    "delete_reason",
+                    "updated_at",
+                ]
+            )
 
             write_audit(
                 actor=request.user,
                 event_type="message_draft_deleted",
                 entity_type="message",
-                entity_id=message_id,
-                payload={},
+                entity_id=draft.id,
+                old_values=old_values,
+                new_values={
+                    "is_deleted": draft.is_deleted,
+                    "deleted_at": draft.deleted_at.isoformat() if draft.deleted_at else None,
+                    "deleted_by": request.user.username,
+                    "delete_reason": draft.delete_reason,
+                },
+                reason="draft deleted by user",
+                request=request,
             )
 
         return ok(status=status.HTTP_204_NO_CONTENT)
@@ -555,6 +604,12 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
             raise PermissionDenied("You can send only your own drafts.")
 
         with transaction.atomic():
+            old_values = {
+                "status": draft.status,
+                "sender_number": draft.sender_number,
+                "created_by_id": draft.created_by_id,
+            }
+
             if not draft.sender_number:
                 draft.sender_number = generate_next_sender_number(user.company)
 
@@ -562,18 +617,30 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
                 draft.created_by = request.user
 
             draft.status = Message.STATUS_PENDING
-            draft.save(update_fields=["sender_number", "status", "updated_at"])
+            draft.save(
+                update_fields=[
+                    "sender_number",
+                    "created_by",
+                    "status",
+                    "updated_at",
+                ]
+            )
 
             write_audit(
                 actor=request.user,
                 event_type="message_sent",
                 entity_type="message",
                 entity_id=draft.id,
-                payload={
-                    "new_status": draft.status,
+                old_values=old_values,
+                new_values={
+                    "status": draft.status,
+                    "sender_number": draft.sender_number,
+                    "created_by_id": draft.created_by_id,
                     "sender_company_id": draft.sender_company_id,
                     "receiver_company_id": draft.receiver_company_id,
                 },
+                reason="draft sent as message",
+                request=request,
             )
             write_outbox(
                 event_type="message_sent",
@@ -621,7 +688,7 @@ class InboxViewSet(ActiveUserCompanyRequiredMixin, viewsets.ReadOnlyModelViewSet
         queryset = (
             Message.objects.select_related("sender_company", "receiver_company")
             .prefetch_related("attachments")
-            .filter(receiver_company=user.company)
+            .filter(receiver_company=user.company, is_deleted=False)
             .exclude(status=Message.STATUS_DRAFT)
             .order_by("-created_at")
         )
@@ -689,6 +756,10 @@ class InboxViewSet(ActiveUserCompanyRequiredMixin, viewsets.ReadOnlyModelViewSet
 
         with transaction.atomic():
             if message.status == Message.STATUS_PENDING:
+                old_values = {
+                    "status": message.status,
+                    "read_at": message.read_at.isoformat() if message.read_at else None,
+                }
                 message.status = Message.STATUS_READ
                 message.read_at = timezone.now()
                 message.save(update_fields=["status", "read_at", "updated_at"])
@@ -698,10 +769,13 @@ class InboxViewSet(ActiveUserCompanyRequiredMixin, viewsets.ReadOnlyModelViewSet
                     event_type="message_opened",
                     entity_type="message",
                     entity_id=message.id,
-                    payload={
-                        "new_status": message.status,
+                    old_values=old_values,
+                    new_values={
+                        "status": message.status,
                         "read_at": message.read_at.isoformat() if message.read_at else None,
                     },
+                    reason="message opened by receiver",
+                    request=request,
                 )
                 write_outbox(
                     event_type="message_opened",
@@ -736,6 +810,13 @@ class InboxViewSet(ActiveUserCompanyRequiredMixin, viewsets.ReadOnlyModelViewSet
             raise ValidationError("receiver_number is already taken.")
 
         with transaction.atomic():
+            old_values = {
+                "status": message.status,
+                "receiver_number": message.receiver_number,
+                "read_at": message.read_at.isoformat() if message.read_at else None,
+                "confirmed_at": message.confirmed_at.isoformat() if message.confirmed_at else None,
+                "confirmed_by_id": message.confirmed_by_id,
+            }
             register_receiver_number(user.company, receiver_number)
 
             if message.status == Message.STATUS_PENDING and message.read_at is None:
@@ -761,12 +842,17 @@ class InboxViewSet(ActiveUserCompanyRequiredMixin, viewsets.ReadOnlyModelViewSet
                 event_type="message_confirmed",
                 entity_type="message",
                 entity_id=message.id,
-                payload={
-                    "new_status": message.status,
-                    "confirmed_at": message.confirmed_at.isoformat()
-                    if message.confirmed_at
-                    else None,
+                old_values=old_values,
+                new_values={
+                    "status": message.status,
+                    "receiver_number": message.receiver_number,
+                    "read_at": message.read_at.isoformat() if message.read_at else None,
+                    "confirmed_at": message.confirmed_at.isoformat() if message.confirmed_at else None,
+                    "confirmed_by_id": message.confirmed_by_id,
+                    "confirmed_by_username": request.user.username,
                 },
+                reason="message confirmed by receiver",
+                request=request,
             )
             write_outbox(
                 event_type="message_confirmed",
@@ -808,7 +894,7 @@ class SentViewSet(ActiveUserCompanyRequiredMixin, viewsets.ReadOnlyModelViewSet)
         queryset = (
             Message.objects.select_related("sender_company", "receiver_company")
             .prefetch_related("attachments")
-            .filter(sender_company=user.company)
+            .filter(sender_company=user.company, is_deleted=False)
             .exclude(status=Message.STATUS_DRAFT)
             .order_by("-created_at")
         )
