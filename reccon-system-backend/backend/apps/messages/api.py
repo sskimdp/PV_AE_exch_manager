@@ -526,27 +526,38 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
 
         should_write_audit = request.data.get("audit") is True
 
-        if changed:
-            new_values = {
-                "subject": draft.subject,
-                "body": draft.body,
-                "body_html": draft.body_html,
-            }
+        new_values = {
+            "subject": draft.subject,
+            "body": draft.body,
+            "body_html": draft.body_html,
+        }
 
-            if old_values != new_values:
-                draft.save(update_fields=["subject", "body", "body_html", "updated_at"])
+        if changed and old_values != new_values:
+            draft.save(update_fields=["subject", "body", "body_html", "updated_at"])
 
-                if should_write_audit:
-                    write_audit(
-                        actor=request.user,
-                        event_type="message_draft_updated",
-                        entity_type="message",
-                        entity_id=draft.id,
-                        old_values=old_values,
-                        new_values=new_values,
-                        reason="draft explicitly saved by user",
-                        request=request,
-                    )
+            if should_write_audit:
+                write_audit(
+                    actor=request.user,
+                    event_type="message_draft_updated",
+                    entity_type="message",
+                    entity_id=draft.id,
+                    old_values=old_values,
+                    new_values=new_values,
+                    reason="draft explicitly updated and saved by user",
+                    request=request,
+                )
+
+        elif should_write_audit:
+            write_audit(
+                actor=request.user,
+                event_type="message_draft_saved",
+                entity_type="message",
+                entity_id=draft.id,
+                old_values=new_values,
+                new_values=new_values,
+                reason="draft explicitly saved by user",
+                request=request,
+            )
 
         serializer = self.get_serializer(draft, context={"request": request})
         return ok(serializer.data)
