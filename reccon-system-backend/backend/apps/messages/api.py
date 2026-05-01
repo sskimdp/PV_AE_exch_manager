@@ -457,34 +457,30 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
             )
 
             duplicate_window_start = timezone.now() - timedelta(seconds=30)
+            possible_duplicate = (
+                Message.objects.filter(
+                    sender_company=company,
+                    receiver_company=master,
+                    created_by=user,
+                    status=Message.STATUS_DRAFT,
+                    subject=subject,
+                    body=body,
+                    body_html=body_html,
+                    is_deleted=False,
+                    created_at__gte=duplicate_window_start,
+                )
+                .order_by("-created_at")
+                .first()
+            )
+
+            if possible_duplicate and not files:
+                serializer = self.get_serializer(
+                    possible_duplicate,
+                    context={"request": request},
+                )
+                return ok(serializer.data, status=status.HTTP_200_OK)
 
             with transaction.atomic():
-                company.__class__.objects.select_for_update().get(pk=company.pk)
-
-                possible_duplicate = (
-                    Message.objects
-                    .filter(
-                        sender_company=company,
-                        receiver_company=master,
-                        created_by=user,
-                        status=Message.STATUS_DRAFT,
-                        subject=subject,
-                        body=body,
-                        body_html=body_html,
-                        is_deleted=False,
-                        created_at__gte=duplicate_window_start,
-                    )
-                    .order_by("-created_at")
-                    .first()
-                )
-
-                if possible_duplicate:
-                    serializer = self.get_serializer(
-                        possible_duplicate,
-                        context={"request": request},
-                    )
-                    return ok(serializer.data, status=status.HTTP_200_OK)
-
                 message = Message.objects.create(
                     sender_company=company,
                     receiver_company=master,
@@ -554,7 +550,7 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
 
             if body_html is not None:
                 draft.body_html = str(body_html)
-                
+
             new_values = {
                 "subject": draft.subject,
                 "body": draft.body,
