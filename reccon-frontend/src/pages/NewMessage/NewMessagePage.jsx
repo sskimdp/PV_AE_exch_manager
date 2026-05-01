@@ -485,11 +485,15 @@ export default function NewMessagePage() {
             reconciliationId,
           });
         } else {
-          draft = await messagesApi.updateDraft(currentState.draftId, {
-            subject: currentState.subject,
-            text: currentState.text,
-            html: currentState.html,
-          });
+          draft = await messagesApi.updateDraft(
+            currentState.draftId,
+            {
+              subject: currentState.subject,
+              text: currentState.text,
+              html: currentState.html,
+            },
+            { audit: force === true }
+          );
 
           if (localAttachments.length > 0) {
             draft = await messagesApi.uploadDraftAttachments(

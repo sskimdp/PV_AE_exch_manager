@@ -524,6 +524,8 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
             draft.body_html = str(body_html)
             changed = True
 
+        should_write_audit = request.data.get("audit") is True
+
         if changed:
             new_values = {
                 "subject": draft.subject,
@@ -534,16 +536,17 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
             if old_values != new_values:
                 draft.save(update_fields=["subject", "body", "body_html", "updated_at"])
 
-                write_audit(
-                    actor=request.user,
-                    event_type="message_draft_updated",
-                    entity_type="message",
-                    entity_id=draft.id,
-                    old_values=old_values,
-                    new_values=new_values,
-                    reason="draft updated by user",
-                    request=request,
-                )
+                if should_write_audit:
+                    write_audit(
+                        actor=request.user,
+                        event_type="message_draft_updated",
+                        entity_type="message",
+                        entity_id=draft.id,
+                        old_values=old_values,
+                        new_values=new_values,
+                        reason="draft explicitly saved by user",
+                        request=request,
+                    )
 
         serializer = self.get_serializer(draft, context={"request": request})
         return ok(serializer.data)

@@ -115,10 +115,13 @@ export const messagesApi = {
     });
   },
 
-  async updateDraft(draftId, patch) {
+  async updateDraft(draftId, patch, options = {}) {
     return await request(`/messages/drafts/${draftId}/`, {
       method: "PATCH",
-      body: patch,
+      body: {
+        ...patch,
+        audit: options.audit === true,
+      },
     });
   },
 
