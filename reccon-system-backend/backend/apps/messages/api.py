@@ -456,30 +456,6 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
                 reconciliation_id=reconciliation_id,
             )
 
-            duplicate_window_start = timezone.now() - timedelta(seconds=30)
-            possible_duplicate = (
-                Message.objects.filter(
-                    sender_company=company,
-                    receiver_company=master,
-                    created_by=user,
-                    status=Message.STATUS_DRAFT,
-                    subject=subject,
-                    body=body,
-                    body_html=body_html,
-                    is_deleted=False,
-                    created_at__gte=duplicate_window_start,
-                )
-                .order_by("-created_at")
-                .first()
-            )
-
-            if possible_duplicate and not files:
-                serializer = self.get_serializer(
-                    possible_duplicate,
-                    context={"request": request},
-                )
-                return ok(serializer.data, status=status.HTTP_200_OK)
-
             with transaction.atomic():
                 message = Message.objects.create(
                     sender_company=company,
@@ -500,19 +476,20 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
                     event_type="message_draft_created",
                     entity_type="message",
                     entity_id=message.id,
-                    old_values={},
-                    new_values={
-                        "status": message.status,
-                        "subject": message.subject,
-                        "body": message.body,
-                        "body_html": message.body_html,
-                        "created_by_id": message.created_by_id,
-                        "created_by_username": user.username,
-                        "sender_company_id": message.sender_company_id,
-                        "receiver_company_id": message.receiver_company_id,
+                    payload={
+                        "reason": "draft created by user",
+                        "old_values": {},
+                        "new_values": {
+                            "status": message.status,
+                            "subject": message.subject,
+                            "body": message.body,
+                            "body_html": message.body_html,
+                            "created_by_id": message.created_by_id,
+                            "created_by_username": user.username,
+                            "sender_company_id": message.sender_company_id,
+                            "receiver_company_id": message.receiver_company_id,
+                        },
                     },
-                    reason="draft created by user",
-                    request=request,
                 )
 
                 write_outbox(
@@ -568,10 +545,11 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
                         event_type="message_draft_updated",
                         entity_type="message",
                         entity_id=draft.id,
-                        old_values=old_values,
-                        new_values=new_values,
-                        reason="draft explicitly updated and saved by user",
-                        request=request,
+                        payload={
+                            "reason": "draft explicitly updated and saved by user",
+                            "old_values": old_values,
+                            "new_values": new_values,
+                        },
                     )
 
             elif should_write_audit:
@@ -580,10 +558,11 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
                     event_type="message_draft_saved",
                     entity_type="message",
                     entity_id=draft.id,
-                    old_values=old_values,
-                    new_values=new_values,
-                    reason="draft explicitly saved by user",
-                    request=request,
+                    payload={
+                        "reason": "draft explicitly saved by user",
+                        "old_values": old_values,
+                        "new_values": new_values,
+                    },
                 )
 
             serializer = self.get_serializer(draft, context={"request": request})
