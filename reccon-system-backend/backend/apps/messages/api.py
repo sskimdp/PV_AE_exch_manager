@@ -3,6 +3,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
+from datetime import timedelta
 from django.utils.dateparse import parse_date
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
@@ -430,137 +431,167 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
             .order_by("-created_at")
         )
 
-    def create(self, request, *args, **kwargs):
-        user = request.user
-        company = get_current_company_with_master(user)
+        def create(self, request, *args, **kwargs):
+            user = request.user
+            company = get_current_company_with_master(user)
 
-        if not company or company.company_type != "slave":
-            raise PermissionDenied("Only SLAVE company can create drafts.")
+            if not company or company.company_type != "slave":
+                raise PermissionDenied("Only SLAVE company can create drafts.")
 
-        master = company.master_partner
-        if not master:
-            raise PermissionDenied("Slave company has no master_partner configured.")
+            master = company.master_partner
+            if not master:
+                raise PermissionDenied("Slave company has no master_partner configured.")
 
-        subject = str(request.data.get("subject") or "")
-        body = str(request.data.get("text") or request.data.get("body") or "")
-        body_html = str(
-            request.data.get("html") or request.data.get("body_html") or ""
-        )
-        files = request.FILES.getlist("files") or request.FILES.getlist("file")
+            subject = str(request.data.get("subject") or "")
+            body = str(request.data.get("text") or request.data.get("body") or "")
+            body_html = str(
+                request.data.get("html") or request.data.get("body_html") or ""
+            )
+            files = request.FILES.getlist("files") or request.FILES.getlist("file")
 
-        reconciliation_id = request.data.get("reconciliation_id")
-        late_send_reconciliation = resolve_late_send_reconciliation(
-            user=user,
-            master_company=master,
-            reconciliation_id=reconciliation_id,
-        )
-
-        with transaction.atomic():
-            message = Message.objects.create(
-                sender_company=company,
-                receiver_company=master,
-                late_send_reconciliation=late_send_reconciliation,
-                created_by=request.user,
-                status=Message.STATUS_DRAFT,
-                subject=subject,
-                body=body,
-                body_html=body_html,
+            reconciliation_id = request.data.get("reconciliation_id")
+            late_send_reconciliation = resolve_late_send_reconciliation(
+                user=user,
+                master_company=master,
+                reconciliation_id=reconciliation_id,
             )
 
-            if files:
-                attach_uploaded_files(request=request, message=message, files=files)
+            duplicate_window_start = timezone.now() - timedelta(seconds=30)
 
-            write_audit(
-                actor=user,
-                event_type="message_draft_created",
-                entity_type="message",
-                entity_id=message.id,
-                old_values={},
-                new_values={
-                    "status": message.status,
-                    "sender_company_id": message.sender_company_id,
-                    "receiver_company_id": message.receiver_company_id,
-                    "subject": message.subject,
-                    "created_by_id": message.created_by_id,
-                    "created_by_username": request.user.username,
-                },
-                reason="draft created by user",
-                request=request,
-            )
-            write_outbox(
-                event_type="message_draft_created",
-                payload={"message_id": message.id},
-            )
+            with transaction.atomic():
+                company.__class__.objects.select_for_update().get(pk=company.pk)
 
-        serializer = self.get_serializer(message, context={"request": request})
-        return ok(serializer.data, status=status.HTTP_201_CREATED)
+                possible_duplicate = (
+                    Message.objects
+                    .filter(
+                        sender_company=company,
+                        receiver_company=master,
+                        created_by=user,
+                        status=Message.STATUS_DRAFT,
+                        subject=subject,
+                        body=body,
+                        body_html=body_html,
+                        is_deleted=False,
+                        created_at__gte=duplicate_window_start,
+                    )
+                    .order_by("-created_at")
+                    .first()
+                )
 
-    def partial_update(self, request, *args, **kwargs):
-        draft = self.get_object()
-        user = request.user
+                if possible_duplicate:
+                    serializer = self.get_serializer(
+                        possible_duplicate,
+                        context={"request": request},
+                    )
+                    return ok(serializer.data, status=status.HTTP_200_OK)
 
-        if not user.company or user.company.company_type != "slave":
-            raise PermissionDenied("Only SLAVE company can edit drafts.")
-        if draft.sender_company_id != user.company_id or draft.status != Message.STATUS_DRAFT:
-            raise PermissionDenied("You can edit only your own drafts.")
+                message = Message.objects.create(
+                    sender_company=company,
+                    receiver_company=master,
+                    late_send_reconciliation=late_send_reconciliation,
+                    created_by=user,
+                    status=Message.STATUS_DRAFT,
+                    subject=subject,
+                    body=body,
+                    body_html=body_html,
+                )
 
-        changed = False
-        subject = request.data.get("subject")
-        body = request.data.get("text")
-        body_html = request.data.get("html")
-        old_values = {
-            "subject": draft.subject,
-            "body": draft.body,
-            "body_html": draft.body_html,
-        }
+                if files:
+                    attach_uploaded_files(request=request, message=message, files=files)
 
-        if subject is not None:
-            draft.subject = str(subject)
-            changed = True
-        if body is not None:
-            draft.body = str(body)
-            changed = True
-        if body_html is not None:
-            draft.body_html = str(body_html)
-            changed = True
+                write_audit(
+                    actor=user,
+                    event_type="message_draft_created",
+                    entity_type="message",
+                    entity_id=message.id,
+                    old_values={},
+                    new_values={
+                        "status": message.status,
+                        "subject": message.subject,
+                        "body": message.body,
+                        "body_html": message.body_html,
+                        "created_by_id": message.created_by_id,
+                        "created_by_username": user.username,
+                        "sender_company_id": message.sender_company_id,
+                        "receiver_company_id": message.receiver_company_id,
+                    },
+                    reason="draft created by user",
+                    request=request,
+                )
 
-        should_write_audit = request.data.get("audit") is True
+                write_outbox(
+                    event_type="message_draft_created",
+                    payload={"message_id": message.id},
+                )
 
-        new_values = {
-            "subject": draft.subject,
-            "body": draft.body,
-            "body_html": draft.body_html,
-        }
+            serializer = self.get_serializer(message, context={"request": request})
+            return ok(serializer.data, status=status.HTTP_201_CREATED)
 
-        if changed and old_values != new_values:
-            draft.save(update_fields=["subject", "body", "body_html", "updated_at"])
+        def partial_update(self, request, *args, **kwargs):
+            draft = self.get_object()
 
-            if should_write_audit:
+            old_values = {
+                "subject": draft.subject,
+                "body": draft.body,
+                "body_html": draft.body_html,
+            }
+
+            subject = request.data.get("subject")
+            body = request.data.get("text")
+            body_html = request.data.get("html")
+
+            if body is None:
+                body = request.data.get("body")
+
+            if body_html is None:
+                body_html = request.data.get("body_html")
+
+            if subject is not None:
+                draft.subject = str(subject)
+
+            if body is not None:
+                draft.body = str(body)
+
+            if body_html is not None:
+                draft.body_html = str(body_html)
+                
+            new_values = {
+                "subject": draft.subject,
+                "body": draft.body,
+                "body_html": draft.body_html,
+            }
+
+            should_write_audit = request.data.get("audit") is True
+
+            if old_values != new_values:
+                draft.save(update_fields=["subject", "body", "body_html", "updated_at"])
+
+                if should_write_audit:
+                    write_audit(
+                        actor=request.user,
+                        event_type="message_draft_updated",
+                        entity_type="message",
+                        entity_id=draft.id,
+                        old_values=old_values,
+                        new_values=new_values,
+                        reason="draft explicitly updated and saved by user",
+                        request=request,
+                    )
+
+            elif should_write_audit:
                 write_audit(
                     actor=request.user,
-                    event_type="message_draft_updated",
+                    event_type="message_draft_saved",
                     entity_type="message",
                     entity_id=draft.id,
                     old_values=old_values,
                     new_values=new_values,
-                    reason="draft explicitly updated and saved by user",
+                    reason="draft explicitly saved by user",
                     request=request,
                 )
 
-        elif should_write_audit:
-            write_audit(
-                actor=request.user,
-                event_type="message_draft_saved",
-                entity_type="message",
-                entity_id=draft.id,
-                old_values=new_values,
-                new_values=new_values,
-                reason="draft explicitly saved by user",
-                request=request,
-            )
-
-        serializer = self.get_serializer(draft, context={"request": request})
-        return ok(serializer.data)
+            serializer = self.get_serializer(draft, context={"request": request})
+            return ok(serializer.data)
 
     def update(self, request, *args, **kwargs):
         return self.partial_update(request, *args, **kwargs)
