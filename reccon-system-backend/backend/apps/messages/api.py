@@ -32,7 +32,6 @@ from apps.attachments.api import build_attachment_download_url
 from apps.reconciliations.models import Reconciliation
 
 
-
 class AttachmentStorageUnavailable(APIException):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     default_detail = (
@@ -378,8 +377,8 @@ class MessageSummaryView(ActiveUserCompanyRequiredMixin, APIView):
         if user.company_id:
             if user.company.company_type == "master":
                 inbox_queryset = Message.objects.filter(
-                receiver_company_id=user.company_id,
-                is_deleted=False,
+                    receiver_company_id=user.company_id,
+                    is_deleted=False,
                 ).exclude(status=Message.STATUS_DRAFT)
                 inbox = inbox_queryset.count()
                 inbox_unconfirmed = inbox_queryset.filter(
