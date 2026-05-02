@@ -507,6 +507,7 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
         subject = request.data.get("subject")
         body = request.data.get("text")
         body_html = request.data.get("html")
+
         old_values = {
             "subject": draft.subject,
             "body": draft.body,
@@ -516,9 +517,11 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
         if subject is not None:
             draft.subject = str(subject)
             changed = True
+
         if body is not None:
             draft.body = str(body)
             changed = True
+
         if body_html is not None:
             draft.body_html = str(body_html)
             changed = True
@@ -545,18 +548,6 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
                     reason="draft explicitly updated and saved by user",
                     request=request,
                 )
-
-        elif should_write_audit:
-            write_audit(
-                actor=request.user,
-                event_type="message_draft_saved",
-                entity_type="message",
-                entity_id=draft.id,
-                old_values=old_values,
-                new_values=new_values,
-                reason="draft explicitly saved by user",
-                request=request,
-            )
 
         serializer = self.get_serializer(draft, context={"request": request})
         return ok(serializer.data)

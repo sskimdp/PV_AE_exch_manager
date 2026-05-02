@@ -305,7 +305,7 @@ export default function DraftsPage() {
 
   const apply = () => setFiltersApplied(filtersDraft);
 
-  const flushDraftPatch = async () => {
+  const flushDraftPatch = async ({ audit = false } = {}) => {
     const draftId = openedDraftIdRef.current;
     const patch = { ...pendingPatchRef.current };
 
@@ -315,7 +315,7 @@ export default function DraftsPage() {
     setIsSavingDraft(true);
 
     try {
-      const updatedDraft = await messagesApi.updateDraft(draftId, patch);
+      const updatedDraft = await messagesApi.updateDraft(draftId, patch, { audit });
       replaceDraft(updatedDraft);
     } catch (error) {
       console.error("Не удалось сохранить изменения черновика", error);
@@ -337,10 +337,10 @@ export default function DraftsPage() {
       window.clearTimeout(saveTimeoutRef.current);
     }
 
-    saveTimeoutRef.current = window.setTimeout(() => {
-      flushDraftPatch();
-      saveTimeoutRef.current = null;
-    }, 400);
+    // saveTimeoutRef.current = window.setTimeout(() => {
+    //   flushDraftPatch();
+    //   saveTimeoutRef.current = null;
+    // }, 400);
   };
 
   const confirmDelete = async () => {
@@ -418,7 +418,7 @@ export default function DraftsPage() {
       window.clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
-    await flushDraftPatch();
+    await flushDraftPatch({ audit: true });
     setOpenedDraftId(null);
     setFileError("");
     setIsLinkModalOpen(false);
