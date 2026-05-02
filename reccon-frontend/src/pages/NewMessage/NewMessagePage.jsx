@@ -437,10 +437,9 @@ export default function NewMessagePage() {
       const latestSignature = buildSyncedSignature(latestState);
 
       if (
-        !force ||
+        force ||
         localAttachments.length > 0 ||
         latestSignature !== lastSyncedSignatureRef.current
-        // ← убери условие !latestState.draftId — оно и вызывает двойной CREATE
       ) {
         resyncRequestedRef.current = true;
         window.setTimeout(() => {
