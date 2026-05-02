@@ -809,6 +809,11 @@ export default function NewMessagePage() {
   const handleSaveDraft = async () => {
     if (!isSlave || !hasMessageContent || isSubmitting) return;
 
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
     try {
       setIsSubmitting(true);
       await syncDraftNow({ force: true });
@@ -825,6 +830,11 @@ export default function NewMessagePage() {
 
   const handleSend = async () => {
     if (!isSlave || !hasMessageContent || isSubmitting) return;
+
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
 
     try {
       setIsSubmitting(true);
