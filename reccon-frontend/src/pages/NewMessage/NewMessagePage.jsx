@@ -426,9 +426,10 @@ export default function NewMessagePage() {
   const syncDraftNow = async ({ force = false } = {}) => {
     if (!isSlave) return null;
 
-    if (syncPromiseRef.current) {
+      if (syncPromiseRef.current) {
       const syncedDraftId = await syncPromiseRef.current;
 
+      // Получаем состояние ПОСЛЕ того как первый sync завершился и draftIdRef обновился
       const latestState = getCurrentComposeState();
       const localAttachments = latestState.attachments.filter(
         (attachment) => attachment?.isLocal && attachment?.file
@@ -437,9 +438,9 @@ export default function NewMessagePage() {
 
       if (
         !force ||
-        !latestState.draftId ||
         localAttachments.length > 0 ||
         latestSignature !== lastSyncedSignatureRef.current
+        // ← убери условие !latestState.draftId — оно и вызывает двойной CREATE
       ) {
         resyncRequestedRef.current = true;
         window.setTimeout(() => {
