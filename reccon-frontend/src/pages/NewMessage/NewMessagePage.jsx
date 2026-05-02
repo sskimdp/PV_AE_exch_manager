@@ -805,27 +805,44 @@ export default function NewMessagePage() {
     }
   };
 
-  const handleSaveDraft = async () => {
-    if (!isSlave || !hasMessageContent || isSubmitting) return;
+const handleSaveDraft = async () => {
+  if (!isSlave || !hasMessageContent || isSubmitting) return;
 
-    if (autosaveTimerRef.current) {
-      window.clearTimeout(autosaveTimerRef.current);
-      autosaveTimerRef.current = null;
+  if (autosaveTimerRef.current) {
+    window.clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = null;
+  }
+
+  try {
+    setIsSubmitting(true);
+
+    const savedDraftId = await syncDraftNow({ force: true });
+
+    if (savedDraftId) {
+      const latestState = getCurrentComposeState();
+
+      const savedDraft = await messagesApi.updateDraft(
+        savedDraftId,
+        {
+          subject: latestState.subject,
+          text: latestState.text,
+          html: latestState.html,
+        },
+        { audit: true }
+      );
+
+      applyDraftResponse(savedDraft);
     }
 
-    try {
-      setIsSubmitting(true);
-      await syncDraftNow({ force: true });
-
-      resetForm();
-      navigate("/drafts");
-    } catch (error) {
-      console.error("Не удалось сохранить черновик", error);
-      setFileError(error.message || "Не удалось сохранить черновик.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    resetForm();
+    navigate("/drafts");
+  } catch (error) {
+    console.error("Не удалось сохранить черновик", error);
+    setFileError(error.message || "Не удалось сохранить черновик.");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const handleSend = async () => {
     if (!isSlave || !hasMessageContent || isSubmitting) return;
