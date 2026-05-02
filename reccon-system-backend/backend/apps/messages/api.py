@@ -3,7 +3,6 @@ from django.db import transaction
 from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
-from datetime import timedelta
 from django.utils.dateparse import parse_date
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
@@ -461,7 +460,7 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
                 sender_company=company,
                 receiver_company=master,
                 late_send_reconciliation=late_send_reconciliation,
-                created_by=user,
+                created_by=request.user,
                 status=Message.STATUS_DRAFT,
                 subject=subject,
                 body=body,
@@ -476,22 +475,18 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
                 event_type="message_draft_created",
                 entity_type="message",
                 entity_id=message.id,
-                payload={
-                    "reason": "draft created by user",
-                    "old_values": {},
-                    "new_values": {
-                        "status": message.status,
-                        "subject": message.subject,
-                        "body": message.body,
-                        "body_html": message.body_html,
-                        "created_by_id": message.created_by_id,
-                        "created_by_username": user.username,
-                        "sender_company_id": message.sender_company_id,
-                        "receiver_company_id": message.receiver_company_id,
-                    },
+                old_values={},
+                new_values={
+                    "status": message.status,
+                    "sender_company_id": message.sender_company_id,
+                    "receiver_company_id": message.receiver_company_id,
+                    "subject": message.subject,
+                    "created_by_id": message.created_by_id,
+                    "created_by_username": request.user.username,
                 },
+                reason="draft created by user",
+                request=request,
             )
-
             write_outbox(
                 event_type="message_draft_created",
                 payload={"message_id": message.id},
@@ -502,68 +497,56 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
 
     def partial_update(self, request, *args, **kwargs):
         draft = self.get_object()
+        user = request.user
 
+        if not user.company or user.company.company_type != "slave":
+            raise PermissionDenied("Only SLAVE company can edit drafts.")
+        if draft.sender_company_id != user.company_id or draft.status != Message.STATUS_DRAFT:
+            raise PermissionDenied("You can edit only your own drafts.")
+
+        changed = False
+        subject = request.data.get("subject")
+        body = request.data.get("text")
+        body_html = request.data.get("html")
         old_values = {
             "subject": draft.subject,
             "body": draft.body,
             "body_html": draft.body_html,
         }
 
-        subject = request.data.get("subject")
-        body = request.data.get("text")
-        body_html = request.data.get("html")
-
-        if body is None:
-            body = request.data.get("body")
-
-        if body_html is None:
-            body_html = request.data.get("body_html")
-
         if subject is not None:
             draft.subject = str(subject)
-
+            changed = True
         if body is not None:
             draft.body = str(body)
-
+            changed = True
         if body_html is not None:
             draft.body_html = str(body_html)
-
-        new_values = {
-            "subject": draft.subject,
-            "body": draft.body,
-            "body_html": draft.body_html,
-        }
+            changed = True
 
         should_write_audit = request.data.get("audit") is True
 
-        if old_values != new_values:
-            draft.save(update_fields=["subject", "body", "body_html", "updated_at"])
+        if changed:
+            new_values = {
+                "subject": draft.subject,
+                "body": draft.body,
+                "body_html": draft.body_html,
+            }
 
-            if should_write_audit:
-                write_audit(
-                    actor=request.user,
-                    event_type="message_draft_updated",
-                    entity_type="message",
-                    entity_id=draft.id,
-                    payload={
-                        "reason": "draft explicitly updated and saved by user",
-                        "old_values": old_values,
-                        "new_values": new_values,
-                    },
-                )
+            if old_values != new_values:
+                draft.save(update_fields=["subject", "body", "body_html", "updated_at"])
 
-        elif should_write_audit:
-            write_audit(
-                actor=request.user,
-                event_type="message_draft_saved",
-                entity_type="message",
-                entity_id=draft.id,
-                payload={
-                    "reason": "draft explicitly saved by user",
-                    "old_values": old_values,
-                    "new_values": new_values,
-                },
-            )
+                if should_write_audit:
+                    write_audit(
+                        actor=request.user,
+                        event_type="message_draft_updated",
+                        entity_type="message",
+                        entity_id=draft.id,
+                        old_values=old_values,
+                        new_values=new_values,
+                        reason="draft explicitly saved by user",
+                        request=request,
+                    )
 
         serializer = self.get_serializer(draft, context={"request": request})
         return ok(serializer.data)
