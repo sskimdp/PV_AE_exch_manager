@@ -750,17 +750,18 @@ export default function NewMessagePage() {
   };
 
   const handleAttachmentRemove = async (attachmentId) => {
-    const toRemove = attachmentsRef.current.find((item) => item.id === attachmentId);
+    const currentAttachments = attachmentsRef.current || [];
+    const toRemove = currentAttachments.find((item) => item.id === attachmentId);
+    const nextAttachments = currentAttachments.filter((item) => item.id !== attachmentId);
 
-    setAttachments((prev) => {
-      const target = prev.find((item) => item.id === attachmentId);
-      if (target?.isLocal && target?.url) {
-        try {
-          URL.revokeObjectURL(target.url);
-        } catch { }
-      }
-      return prev.filter((item) => item.id !== attachmentId);
-    });
+    if (toRemove?.isLocal && toRemove?.url) {
+      try {
+        URL.revokeObjectURL(toRemove.url);
+      } catch {}
+    }
+
+    attachmentsRef.current = nextAttachments;
+    setAttachments(nextAttachments);
 
     if (!toRemove || toRemove.isLocal) {
       return;
@@ -769,9 +770,13 @@ export default function NewMessagePage() {
     try {
       await messagesApi.deleteAttachment(toRemove);
       lastSyncedSignatureRef.current = "";
+      window.dispatchEvent(new CustomEvent(messagesApi.events.MESSAGE_CHANGED_EVENT));
     } catch (error) {
       console.error("Не удалось удалить вложение", error);
       setFileError(error.message || "Не удалось удалить вложение.");
+
+      attachmentsRef.current = currentAttachments;
+      setAttachments(currentAttachments);
     }
   };
 
@@ -780,6 +785,11 @@ export default function NewMessagePage() {
 
     if (autosaveTimerRef.current) {
       window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
+    if (!draftIdRef.current) {
+      return;
     }
 
     if (!isMeaningfulDraftContent({ text: editorText, attachments })) {
@@ -795,12 +805,13 @@ export default function NewMessagePage() {
     }
 
     autosaveTimerRef.current = window.setTimeout(() => {
-      syncDraftNow().catch(() => { });
+      syncDraftNow().catch(() => {});
     }, 1200);
 
     return () => {
       if (autosaveTimerRef.current) {
         window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
       }
     };
   }, [attachments, editorText, isSlave, reconciliationId, subject]);

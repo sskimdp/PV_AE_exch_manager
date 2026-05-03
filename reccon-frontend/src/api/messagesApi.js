@@ -160,6 +160,8 @@ export const messagesApi = {
       typeof attachment === "string"
         ? attachment
         : attachment?.deleteUrl || `/attachments/${attachment?.id}/`;
+
     await request(normalizeApiPath(url), { method: "DELETE" });
+    emitMessagesChanged();
   },
 };
