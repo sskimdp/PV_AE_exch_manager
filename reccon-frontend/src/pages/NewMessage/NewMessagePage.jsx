@@ -285,10 +285,53 @@ export default function NewMessagePage() {
       window.removeEventListener("beforeunload", markPageUnload);
 
       if (!isPageUnloadingRef.current) {
+        const latestState = {
+          draftId: draftIdRef.current,
+          subject: subjectRef.current,
+          text: editorRef.current?.textContent || editorTextRef.current || "",
+          html: editorRef.current?.innerHTML || editorHtmlRef.current || "",
+          attachments: attachmentsRef.current || [],
+        };
+
+        const hasContent = isMeaningfulDraftContent({
+          text: latestState.text,
+          attachments: latestState.attachments,
+        });
+
+        if (isSlave && hasContent) {
+          if (latestState.draftId) {
+            messagesApi
+              .updateDraft(
+                latestState.draftId,
+                {
+                  subject: latestState.subject,
+                  text: latestState.text,
+                  html: latestState.html,
+                },
+                { audit: true }
+              )
+              .catch((error) => {
+                console.error("Не удалось сохранить черновик при выходе со страницы", error);
+              });
+          } else {
+            messagesApi
+              .createDraft({
+                subject: latestState.subject,
+                text: latestState.text,
+                html: latestState.html,
+                attachments: latestState.attachments,
+                reconciliationId,
+              })
+              .catch((error) => {
+                console.error("Не удалось создать черновик при выходе со страницы", error);
+              });
+          }
+        }
+
         clearComposeState(composeStorageKey);
       }
     };
-  }, [composeStorageKey]);
+  }, [composeStorageKey, isSlave, reconciliationId]);
 
   useEffect(() => {
     hasRestoredComposeStateRef.current = false;
