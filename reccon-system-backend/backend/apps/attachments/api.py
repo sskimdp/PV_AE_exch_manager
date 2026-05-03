@@ -1,6 +1,7 @@
 from urllib.parse import urlencode
 
 from django.conf import settings
+from django.db import transaction
 from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
@@ -14,6 +15,7 @@ from apps.attachments.minio import delete_object, stream_object
 from apps.attachments.models import Attachment
 from apps.audit.service import write_audit
 from apps.messages.models import Message
+from apps.outbox.service import write_outbox
 
 
 DOWNLOAD_SIGNER_SALT = "attachments.download"
@@ -194,19 +196,48 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         message_id = att.message_id
         filename = att.filename
         storage_key = att.storage_key
+        content_type = att.content_type
+        size = att.size
 
-        delete_object(storage_key)
-        att.delete()
+        old_values = {
+            "attachment_id": attachment_id,
+            "message_id": message_id,
+            "filename": filename,
+            "storage_key": storage_key,
+            "content_type": content_type,
+            "size": size,
+            "message_updated_at": msg.updated_at.isoformat() if msg.updated_at else None,
+        }
 
-        write_audit(
-            actor=request.user,
-            event_type="attachment_deleted",
-            entity_type="attachment",
-            entity_id=attachment_id,
-            payload={
-                "message_id": message_id,
-                "filename": filename,
-            },
-        )
+        with transaction.atomic():
+            delete_object(storage_key)
+            att.delete()
+
+            msg.updated_at = timezone.now()
+            msg.save(update_fields=["updated_at"])
+
+            write_audit(
+                actor=request.user,
+                event_type="attachment_deleted",
+                entity_type="attachment",
+                entity_id=attachment_id,
+                old_values=old_values,
+                new_values={
+                    "deleted": True,
+                    "message_id": message_id,
+                    "filename": filename,
+                    "message_updated_at": msg.updated_at.isoformat() if msg.updated_at else None,
+                },
+                reason="attachment deleted from draft",
+                request=request,
+            )
+
+            write_outbox(
+                event_type="attachment_deleted",
+                payload={
+                    "attachment_id": attachment_id,
+                    "message_id": message_id,
+                },
+            )
 
         return Response(status=status.HTTP_204_NO_CONTENT)

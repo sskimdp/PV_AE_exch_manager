@@ -320,6 +320,9 @@ class DraftSerializer(FrontendMessageSerializer):
     def get_number(self, obj):
         return obj.sender_number or ""
 
+    def get_date(self, obj):
+        return format_front_date(obj.updated_at or obj.created_at)
+
 
 class InboxSerializer(FrontendMessageSerializer):
     def get_company(self, obj):
@@ -426,7 +429,7 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
                 status=Message.STATUS_DRAFT,
                 is_deleted=False,
             )
-            .order_by("-created_at")
+            .order_by("-updated_at", "-created_at")
         )
 
     def create(self, request, *args, **kwargs):
@@ -683,6 +686,9 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
 
         with transaction.atomic():
             attach_uploaded_files(request=request, message=draft, files=files)
+            draft.save(update_fields=["updated_at"])
+
+        draft.refresh_from_db()
 
         serializer = self.get_serializer(draft, context={"request": request})
         return ok(serializer.data, status=status.HTTP_201_CREATED)

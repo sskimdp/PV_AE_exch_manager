@@ -272,6 +272,23 @@ export default function NewMessagePage() {
   const autosaveTimerRef = useRef(null);
   const lastSyncedSignatureRef = useRef("");
   const hasRestoredComposeStateRef = useRef(false);
+  const isPageUnloadingRef = useRef(false);
+
+  useEffect(() => {
+    const markPageUnload = () => {
+      isPageUnloadingRef.current = true;
+    };
+
+    window.addEventListener("beforeunload", markPageUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", markPageUnload);
+
+      if (!isPageUnloadingRef.current) {
+        clearComposeState(composeStorageKey);
+      }
+    };
+  }, [composeStorageKey]);
 
   useEffect(() => {
     hasRestoredComposeStateRef.current = false;
@@ -723,9 +740,6 @@ export default function NewMessagePage() {
 
     if (valid.length > 0) {
       setAttachments((prev) => [...prev, ...valid]);
-      window.setTimeout(() => {
-        syncDraftNow({ force: true }).catch(() => { });
-      }, 0);
     }
 
     e.target.value = "";
@@ -769,6 +783,14 @@ export default function NewMessagePage() {
     }
 
     if (!isMeaningfulDraftContent({ text: editorText, attachments })) {
+      return;
+    }
+
+    const hasLocalAttachments = attachments.some(
+      (attachment) => attachment?.isLocal && attachment?.file
+    );
+
+    if (hasLocalAttachments) {
       return;
     }
 
