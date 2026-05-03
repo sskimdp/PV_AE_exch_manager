@@ -14,6 +14,7 @@ from rest_framework.response import Response
 
 from apps.companies.models import Company
 from apps.messages.models import Message
+from apps.audit.service import write_audit
 from apps.reconciliations.export import build_reconciliation_export_workbook
 from apps.reconciliations.models import (
     Reconciliation,
@@ -316,6 +317,25 @@ class ReconciliationCreateSerializer(serializers.Serializer):
             message = exc.messages if hasattr(exc, "messages") else str(exc)
             raise ValidationError(message)
 
+        write_audit(
+            actor=user,
+            event_type="reconciliation_created",
+            entity_type="reconciliation",
+            entity_id=rec.id,
+            old_values={},
+            new_values={
+                "id": rec.id,
+                "master_company_id": rec.master_company_id,
+                "slave_company_id": rec.slave_company_id,
+                "period_start": rec.period_start.isoformat() if rec.period_start else None,
+                "period_end": rec.period_end.isoformat() if rec.period_end else None,
+                "status": rec.status,
+                "current_stage_number": rec.current_stage_number,
+            },
+            reason="reconciliation created by master",
+            request=request,
+        )
+
         return rec
 
     def to_representation(self, instance):
@@ -454,6 +474,24 @@ class ReconciliationViewSet(
 
         now = timezone.now()
 
+        old_values = {
+            "stage_id": stage.id,
+            "stage_number": stage.stage_number,
+            "item_ids": item_ids,
+            "confirmed_before": [
+                {
+                    "id": item.id,
+                    "confirmed_by_slave": item.confirmed_by_slave,
+                    "confirmed_by_slave_at": (
+                        item.confirmed_by_slave_at.isoformat()
+                        if item.confirmed_by_slave_at
+                        else None
+                    ),
+                }
+                for item in items
+            ],
+        }
+
         with transaction.atomic():
             for item in items:
                 item.confirmed_by_slave = True
@@ -462,6 +500,23 @@ class ReconciliationViewSet(
             ReconciliationStageItem.objects.bulk_update(
                 items,
                 ["confirmed_by_slave", "confirmed_by_slave_at"],
+            )
+
+            write_audit(
+                actor=request.user,
+                event_type="reconciliation_items_confirmed_by_slave",
+                entity_type="reconciliation",
+                entity_id=reconciliation.id,
+                old_values=old_values,
+                new_values={
+                    "stage_id": stage.id,
+                    "stage_number": stage.stage_number,
+                    "confirmed_count": len(items),
+                    "item_ids": item_ids,
+                    "confirmed_by_slave_at": now.isoformat(),
+                },
+                reason="slave confirmed reconciliation stage items",
+                request=request,
             )
 
         return Response(
@@ -545,6 +600,24 @@ class ReconciliationViewSet(
             stage_number=stage_number,
         )
 
+        write_audit(
+            actor=request.user,
+            event_type="reconciliation_chat_message_created",
+            entity_type="reconciliation_chat_message",
+            entity_id=chat_message.id,
+            old_values={},
+            new_values={
+                "reconciliation_id": reconciliation.id,
+                "stage_number": chat_message.stage_number,
+                "author_id": chat_message.author_id,
+                "author_username": request.user.username,
+                "company_id": chat_message.company_id,
+                "text": chat_message.text,
+            },
+            reason="chat message created in reconciliation",
+            request=request,
+        )
+
         return Response(
             {
                 "ok": True,
@@ -612,6 +685,34 @@ class ReconciliationViewSet(
             ),
         )
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        
+        write_audit(
+            actor=request.user,
+            event_type="reconciliation_exported",
+            entity_type="reconciliation",
+            entity_id=reconciliation.id,
+            old_values={},
+            new_values={
+                "reconciliation_id": reconciliation.id,
+                "stage": stage_param,
+                "filename": filename,
+                "master_company_id": reconciliation.master_company_id,
+                "slave_company_id": reconciliation.slave_company_id,
+                "period_start": (
+                    reconciliation.period_start.isoformat()
+                    if reconciliation.period_start
+                    else None
+                ),
+                "period_end": (
+                    reconciliation.period_end.isoformat()
+                    if reconciliation.period_end
+                    else None
+                ),
+            },
+            reason="reconciliation exported",
+            request=request,
+        )
+
         return response
 
     @action(detail=True, methods=["post"], url_path="new-stage")
@@ -626,12 +727,33 @@ class ReconciliationViewSet(
             raise PermissionDenied(
                 "You can start a new stage only for your company reconciliation."
             )
+        
+        old_values = {
+            "status": reconciliation.status,
+            "current_stage_number": reconciliation.current_stage_number,
+        }
 
         try:
             create_next_stage(reconciliation=reconciliation, created_by=user)
         except DjangoValidationError as exc:
             message = exc.messages if hasattr(exc, "messages") else str(exc)
             raise ValidationError(message)
+
+        reconciliation.refresh_from_db()
+
+        write_audit(
+            actor=request.user,
+            event_type="reconciliation_stage_created",
+            entity_type="reconciliation",
+            entity_id=reconciliation.id,
+            old_values=old_values,
+            new_values={
+                "status": reconciliation.status,
+                "current_stage_number": reconciliation.current_stage_number,
+            },
+            reason="new reconciliation stage created by master",
+            request=request,
+        )
 
         reconciliation = (
             Reconciliation.objects.select_related(
@@ -672,11 +794,34 @@ class ReconciliationViewSet(
         if user.company_id != reconciliation.master_company_id:
             raise PermissionDenied("You can finish only your company reconciliation.")
 
+        old_values = {
+            "status": reconciliation.status,
+            "finished_at": reconciliation.finished_at.isoformat() if reconciliation.finished_at else None,
+            "current_stage_number": reconciliation.current_stage_number,
+        }
+
         try:
             finish_reconciliation(reconciliation=reconciliation, finished_by=user)
         except DjangoValidationError as exc:
             message = exc.messages if hasattr(exc, "messages") else str(exc)
             raise ValidationError(message)
+
+        reconciliation.refresh_from_db()
+
+        write_audit(
+            actor=request.user,
+            event_type="reconciliation_finished",
+            entity_type="reconciliation",
+            entity_id=reconciliation.id,
+            old_values=old_values,
+            new_values={
+                "status": reconciliation.status,
+                "finished_at": reconciliation.finished_at.isoformat() if reconciliation.finished_at else None,
+                "current_stage_number": reconciliation.current_stage_number,
+            },
+            reason="reconciliation finished by master",
+            request=request,
+        )
 
         reconciliation = (
             Reconciliation.objects.select_related(
