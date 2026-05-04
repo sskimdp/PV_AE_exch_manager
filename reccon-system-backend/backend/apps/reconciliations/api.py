@@ -646,6 +646,7 @@ class ReconciliationViewSet(
             raise ValidationError("scope must be 'stage' or 'all'.")
 
         stage_number = None
+
         if scope == "stage":
             stage_number_raw = request.query_params.get("stage_number")
             if stage_number_raw in (None, ""):
@@ -678,14 +679,6 @@ class ReconciliationViewSet(
         else:
             filename = f"reconciliation_{reconciliation.id}_stage_{stage_number}.xlsx"
 
-        response = HttpResponse(
-            output.getvalue(),
-            content_type=(
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            ),
-        )
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        
         write_audit(
             actor=request.user,
             event_type="reconciliation_exported",
@@ -694,7 +687,8 @@ class ReconciliationViewSet(
             old_values={},
             new_values={
                 "reconciliation_id": reconciliation.id,
-                "stage": stage_param,
+                "scope": scope,
+                "stage_number": stage_number,
                 "filename": filename,
                 "master_company_id": reconciliation.master_company_id,
                 "slave_company_id": reconciliation.slave_company_id,
@@ -713,6 +707,13 @@ class ReconciliationViewSet(
             request=request,
         )
 
+        response = HttpResponse(
+            output.getvalue(),
+            content_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
     @action(detail=True, methods=["post"], url_path="new-stage")
