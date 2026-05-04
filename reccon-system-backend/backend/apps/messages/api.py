@@ -662,6 +662,25 @@ class MessageDraftViewSet(ActiveUserCompanyRequiredMixin, viewsets.ModelViewSet)
                 payload={"message_id": draft.id},
             )
 
+            if draft.late_send_reconciliation_id:
+                write_audit(
+                    actor=request.user,
+                    event_type="reconciliation_late_message_sent",
+                    entity_type="reconciliation",
+                    entity_id=draft.late_send_reconciliation_id,
+                    old_values={},
+                    new_values={
+                        "message_id": draft.id,
+                        "sender_company_id": draft.sender_company_id,
+                        "receiver_company_id": draft.receiver_company_id,
+                        "sender_number": draft.sender_number,
+                        "status": draft.status,
+                        "subject": draft.subject,
+                    },
+                    reason="late message sent from reconciliation",
+                    request=request,
+                )
+
         serializer = SentSerializer(draft, context={"request": request})
         return ok(serializer.data)
 
@@ -1016,6 +1035,24 @@ class SentViewSet(ActiveUserCompanyRequiredMixin, viewsets.ReadOnlyModelViewSet)
                 event_type="message_sent",
                 payload={"message_id": message.id},
             )
+            if message.late_send_reconciliation_id:
+                write_audit(
+                    actor=request.user,
+                    event_type="reconciliation_late_message_sent",
+                    entity_type="reconciliation",
+                    entity_id=message.late_send_reconciliation_id,
+                    old_values={},
+                    new_values={
+                        "message_id": message.id,
+                        "sender_company_id": message.sender_company_id,
+                        "receiver_company_id": message.receiver_company_id,
+                        "sender_number": message.sender_number,
+                        "status": message.status,
+                        "subject": message.subject,
+                    },
+                    reason="late message sent from reconciliation",
+                    request=request,
+                )
 
         serializer = self.get_serializer(message, context={"request": request})
         return ok(serializer.data, status=status.HTTP_201_CREATED)
