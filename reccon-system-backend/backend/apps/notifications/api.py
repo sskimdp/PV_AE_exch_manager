@@ -9,6 +9,7 @@ from apps.common.responses import ok
 from apps.companies.models import Company
 from apps.notifications.models import CompanyReminderSettings, Notification
 from apps.messages.models import Message
+from apps.audit.service import write_audit
 
 INTERVAL_TO_LABEL = {
     30: "30 мин.",
@@ -156,6 +157,16 @@ class ReminderSettingsView(APIView):
     def put(self, request):
         company = self._resolve_company(request)
         settings, _ = CompanyReminderSettings.objects.get_or_create(company=company)
+
+        old_values = {
+            "company_id": company.id,
+            "company_name": company.name,
+            "enabled": settings.enabled,
+            "interval_minutes": settings.interval_minutes,
+            "send_inside": settings.send_inside,
+            "send_email": settings.send_email,
+        }
+
         serializer = ReminderSettingsWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -167,5 +178,28 @@ class ReminderSettingsView(APIView):
         if "channels" in data:
             settings.send_inside = data["channels"]["inside"]
             settings.send_email = data["channels"]["email"]
+
         settings.save()
+
+        new_values = {
+            "company_id": company.id,
+            "company_name": company.name,
+            "enabled": settings.enabled,
+            "interval_minutes": settings.interval_minutes,
+            "send_inside": settings.send_inside,
+            "send_email": settings.send_email,
+        }
+
+        if old_values != new_values:
+            write_audit(
+                actor=request.user,
+                event_type="reminder_settings_updated",
+                entity_type="company_reminder_settings",
+                entity_id=settings.id,
+                old_values=old_values,
+                new_values=new_values,
+                reason="reminder settings updated by admin",
+                request=request,
+            )
+
         return ok(ReminderSettingsSerializer(settings).data)
