@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from apps.common.responses import ok
 from apps.companies.models import Company
 from apps.users.models import User
+from apps.audit.service import write_audit
 
 ACTIVE_LABEL = "активен"
 INACTIVE_LABEL = "неактивен"
@@ -291,18 +292,83 @@ class CompanyAdminViewSet(AdminAccessMixin, viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         company = serializer.save()
+
+        write_audit(
+            actor=request.user,
+            event_type="company_created",
+            entity_type="company",
+            entity_id=company.id,
+            old_values={},
+            new_values={
+                "id": company.id,
+                "name": company.name,
+                "company_type": company.company_type,
+                "master_partner_id": company.master_partner_id,
+                "is_active": company.is_active,
+            },
+            reason="company created by admin",
+            request=request,
+        )
+
         return ok(CompanyAdminListSerializer(company).data, status=201)
 
     def partial_update(self, request, *args, **kwargs):
         company = self.get_object()
+
+        old_values = {
+            "name": company.name,
+            "company_type": company.company_type,
+            "master_partner_id": company.master_partner_id,
+            "is_active": company.is_active,
+        }
+
         serializer = self.get_serializer(company, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         company = serializer.save()
+
+        new_values = {
+            "name": company.name,
+            "company_type": company.company_type,
+            "master_partner_id": company.master_partner_id,
+            "is_active": company.is_active,
+        }
+
+        if old_values != new_values:
+            write_audit(
+                actor=request.user,
+                event_type="company_updated",
+                entity_type="company",
+                entity_id=company.id,
+                old_values=old_values,
+                new_values=new_values,
+                reason="company updated by admin",
+                request=request,
+            )
+
         return ok(CompanyAdminListSerializer(company).data)
 
     @action(detail=True, methods=["post"], url_path="toggle-status")
     def toggle_status(self, request, pk=None):
         company = self.get_object()
+
+        old_values = {
+            "is_active": company.is_active,
+        }
+
         company.is_active = not company.is_active
         company.save(update_fields=["is_active"])
+
+        write_audit(
+            actor=request.user,
+            event_type="company_status_changed",
+            entity_type="company",
+            entity_id=company.id,
+            old_values=old_values,
+            new_values={
+                "is_active": company.is_active,
+            },
+            reason="company status toggled by admin",
+            request=request,
+        )
+
         return ok(CompanyAdminListSerializer(company).data)

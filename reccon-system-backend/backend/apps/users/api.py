@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from apps.common.responses import ok
 from apps.companies.models import Company
 from apps.users.models import User
+from apps.audit.service import write_audit
 
 ACTIVE_LABEL = "активен"
 INACTIVE_LABEL = "неактивен"
@@ -217,24 +218,105 @@ class UserAdminViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+
+        write_audit(
+            actor=request.user,
+            event_type="user_created",
+            entity_type="user",
+            entity_id=user.id,
+            old_values={},
+            new_values={
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "company_id": user.company_id,
+                "company_name": user.company.name if user.company_id else "",
+                "is_company_admin": user.is_company_admin,
+                "is_active": user.is_active,
+            },
+            reason="user created by company admin",
+            request=request,
+        )
+
         return ok(AdminUserListSerializer(user).data, status=201)
 
     def partial_update(self, request, *args, **kwargs):
         user = self.get_object()
         current_user = self._require_company_admin()
-        if current_user.company.company_type == Company.TYPE_SLAVE and user.company_id != current_user.company_id:
+
+        if (
+            current_user.company.company_type == Company.TYPE_SLAVE
+            and user.company_id != current_user.company_id
+        ):
             raise PermissionDenied("Slave admin can edit only users of their own company.")
+
+        old_values = {
+            "username": user.username,
+            "email": user.email,
+            "company_id": user.company_id,
+            "company_name": user.company.name if user.company_id else "",
+            "is_company_admin": user.is_company_admin,
+            "is_active": user.is_active,
+        }
+
         serializer = self.get_serializer(user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+
+        new_values = {
+            "username": user.username,
+            "email": user.email,
+            "company_id": user.company_id,
+            "company_name": user.company.name if user.company_id else "",
+            "is_company_admin": user.is_company_admin,
+            "is_active": user.is_active,
+        }
+
+        if old_values != new_values:
+            write_audit(
+                actor=request.user,
+                event_type="user_updated",
+                entity_type="user",
+                entity_id=user.id,
+                old_values=old_values,
+                new_values=new_values,
+                reason="user updated by company admin",
+                request=request,
+            )
+
         return ok(AdminUserListSerializer(user).data)
 
     @action(detail=True, methods=["post"], url_path="toggle-status")
     def toggle_status(self, request, pk=None):
         user = self.get_object()
         current_user = self._require_company_admin()
-        if current_user.company.company_type == Company.TYPE_SLAVE and user.company_id != current_user.company_id:
+
+        if (
+            current_user.company.company_type == Company.TYPE_SLAVE
+            and user.company_id != current_user.company_id
+        ):
             raise PermissionDenied("Slave admin can edit only users of their own company.")
+
+        old_values = {
+            "is_active": user.is_active,
+            "status": status_label(user.is_active),
+        }
+
         user.is_active = not user.is_active
         user.save(update_fields=["is_active"])
+
+        write_audit(
+            actor=request.user,
+            event_type="user_status_changed",
+            entity_type="user",
+            entity_id=user.id,
+            old_values=old_values,
+            new_values={
+                "is_active": user.is_active,
+                "status": status_label(user.is_active),
+            },
+            reason="user status toggled by company admin",
+            request=request,
+        )
+
         return ok(AdminUserListSerializer(user).data)
