@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../Button/Button";
 import { MENU_CONFIG } from "./menuConfig";
 import { storage } from "../../utils/storage";

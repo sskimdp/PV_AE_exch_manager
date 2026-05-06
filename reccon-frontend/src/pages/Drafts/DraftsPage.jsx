@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { SearchInput } from "../../components/SearchInput/SearchInput";
 import { Chip } from "../../components/Chip/Chip";
